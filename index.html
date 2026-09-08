@@ -155,7 +155,7 @@
 </div>
 
 <script>
-const START_YEAR = 2026, START_MONTH = 10;
+const START_YEAR = 2026, START_MONTH = 9; // Set/2026 — mês atual
 const MONTH_ABBR = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
 function generateMonthDefs() {
@@ -189,8 +189,12 @@ const PLAN_NOTE = {
 };
 
 function monthIndex(m) { return MONTHS.indexOf(m); }
-function biancaForMonth(m) { const i = monthIndex(m); if (i <= 3) return 200; if (i >= 4 && i <= 8) return 60; return 0; }
-function noverdeForMonth(m) { const i = monthIndex(m); return i <= 10 ? 260.46 : 0; }
+function monthsSinceOct2026(m) {
+  const [y, mo] = m.split('-').map(Number);
+  return (y - 2026) * 12 + (mo - 10);
+}
+function biancaForMonth(m) { const i = monthsSinceOct2026(m); if (i < 0) return 0; if (i <= 3) return 200; if (i >= 4 && i <= 8) return 60; return 0; }
+function noverdeForMonth(m) { const i = monthsSinceOct2026(m); if (i < 0) return 0; return i <= 10 ? 260.46 : 0; }
 function fixedObrigacoes(m) { return biancaForMonth(m) + noverdeForMonth(m); }
 
 // dueDay: dia do mês do vencimento (aproximado p/ Bianca)
@@ -203,7 +207,13 @@ const DEBTS = [
   { id: 'nov99', name: '99 — Empréstimo 4', meta: 'Última parcela R$318,69', kind: 'checkable', dueDay: 10, quickCat: 'Dívida fixa', quickVal: () => 318.69 },
 ];
 
-const SAVINGS_GOAL = 20000;
+function allDebts() {
+  const custom = state.customDebts.map(c => ({
+    id: c.id, name: c.name, meta: c.meta, kind: c.kind, dueDay: c.dueDay,
+    custom: true, quickCat: 'Dívida fixa', quickVal: () => c.valor
+  }));
+  return [...DEBTS, ...custom];
+}
 const SAVINGS_DEADLINE = 'dezembro de 2027';
 const CONFIG_KEY = 'kayo-financas-config';
 const PIN_KEY = 'kayo-financas-pin';
@@ -211,7 +221,7 @@ const TABLE = 'financas';
 
 let cfg = null;
 let sb = null;
-let state = { entries: [], debtStatus: {}, currentMonth: MONTHS[0] };
+let state = { entries: [], debtStatus: {}, customDebts: [], currentMonth: MONTHS[0] };
 let saveError = false;
 let syncing = false;
 let copyConfirmVisible = false;
@@ -299,8 +309,9 @@ async function loadData() {
     if (data && data.payload) {
       state.entries = (data.payload.entries || []).map(e => ({ ...e, month: OLD_KEY_MAP[e.month] || e.month }));
       state.debtStatus = data.payload.debtStatus || {};
+      state.customDebts = data.payload.customDebts || [];
     } else {
-      await sb.from(TABLE).insert({ id: cfg.code, payload: { entries: [], debtStatus: {} } });
+      await sb.from(TABLE).insert({ id: cfg.code, payload: { entries: [], debtStatus: {}, customDebts: [] } });
     }
     render();
   } catch (e) {
@@ -314,7 +325,7 @@ async function saveData() {
     try {
       const { error } = await sb.from(TABLE).upsert({
         id: cfg.code,
-        payload: { entries: state.entries, debtStatus: state.debtStatus },
+        payload: { entries: state.entries, debtStatus: state.debtStatus, customDebts: state.customDebts },
         updated_at: new Date().toISOString()
       });
       if (!error) { syncing = false; return true; }
@@ -359,7 +370,7 @@ function buildSummaryText() {
   });
   lines.push('');
   lines.push('Dívidas:');
-  DEBTS.forEach(d => {
+  allDebts().forEach(d => {
     const checked = !!state.debtStatus[d.id];
     lines.push('- ' + d.name + ': ' + (d.kind === 'checkable' ? (checked ? 'quitado/resolvido' : 'pendente') : 'em andamento'));
   });
@@ -387,7 +398,8 @@ function render() {
   const maxAbs = Math.max(1, ...chartVals.map(v => Math.abs(v)));
 
   const catBreak = categoryBreakdown(m);
-  const dueList = DEBTS.filter(d => d.dueDay).map(d => ({ ...d, days: daysUntil(d.dueDay) })).sort((a,b) => a.days - b.days);
+  const debtsAll = allDebts();
+  const dueList = debtsAll.filter(d => d.dueDay).map(d => ({ ...d, days: daysUntil(d.dueDay) })).sort((a,b) => a.days - b.days);
 
   app.innerHTML = `
     <div class="masthead">
@@ -501,7 +513,7 @@ function render() {
 
     <section>
       <div class="section-title">Dívidas do plano</div>
-      ${DEBTS.map(d => {
+      ${debtsAll.map(d => {
         const checked = !!state.debtStatus[d.id];
         let statusHtml = '';
         if (d.kind === 'checkable') {
@@ -513,7 +525,7 @@ function render() {
         }
         return `
           <div class="debt-row">
-            <div class="debt-top"><span class="debt-name">${d.name}</span>${statusHtml}</div>
+            <div class="debt-top"><span class="debt-name">${d.name}${d.custom ? ' <span class="entry-cat">(sua)</span>' : ''}</span>${statusHtml}</div>
             <div class="debt-meta">${d.meta}</div>
             <div class="debt-bottom">
               ${d.kind === 'checkable' ? `
@@ -521,11 +533,32 @@ function render() {
                   <input type="checkbox" data-debt="${d.id}" ${checked ? 'checked' : ''}>
                   ${d.label || 'Marcar como quitado'}
                 </label>` : '<span></span>'}
-              <button class="quick-btn" data-quick="${d.id}">Lançar ${fmt(d.quickVal(m))}</button>
+              <div style="display:flex;gap:6px;">
+                <button class="quick-btn" data-quick="${d.id}">Lançar ${fmt(d.quickVal(m))}</button>
+                ${d.custom ? `<span class="entry-del" data-custom-del="${d.id}">✕</span>` : ''}
+              </div>
             </div>
           </div>
         `;
       }).join('')}
+
+      <div class="debt-row" style="border-bottom:none;">
+        <button class="action-btn secondary" id="btn-new-debt-toggle">+ Cadastrar nova conta</button>
+        <div id="new-debt-form" style="display:none; margin-top:12px;">
+          <div class="form-row two">
+            <input type="text" id="nd-nome" placeholder="Nome (ex: Internet)">
+            <input type="number" id="nd-valor" placeholder="Valor (R$)" step="0.01" min="0">
+          </div>
+          <div class="form-row two">
+            <select id="nd-tipo">
+              <option value="ongoing">Recorrente (todo mês)</option>
+              <option value="checkable">Quitável (uma vez)</option>
+            </select>
+            <input type="number" id="nd-dia" placeholder="Dia do vencimento (opcional)" min="1" max="31">
+          </div>
+          <button class="add-btn" id="btn-new-debt-save">Salvar conta</button>
+        </div>
+      </div>
     </section>
 
     <section>
@@ -620,7 +653,7 @@ function render() {
   }));
 
   document.querySelectorAll('[data-quick]').forEach(el => el.addEventListener('click', async () => {
-    const d = DEBTS.find(x => x.id === el.dataset.quick);
+    const d = allDebts().find(x => x.id === el.dataset.quick);
     const entry = { id: Date.now().toString(36), month: state.currentMonth, date: new Date().toISOString().slice(0,10), type: 'out', cat: d.quickCat, nota: d.name, valor: d.quickVal(state.currentMonth) };
     state.entries.push(entry);
     render();
@@ -629,8 +662,44 @@ function render() {
     render();
   }));
 
+  document.getElementById('btn-new-debt-toggle').addEventListener('click', () => {
+    const f = document.getElementById('new-debt-form');
+    f.style.display = f.style.display === 'none' ? 'block' : 'none';
+  });
+
+  document.getElementById('btn-new-debt-save').addEventListener('click', async () => {
+    const nome = document.getElementById('nd-nome').value.trim();
+    const valor = parseFloat(document.getElementById('nd-valor').value);
+    const tipo = document.getElementById('nd-tipo').value;
+    const dia = parseInt(document.getElementById('nd-dia').value, 10);
+    if (!nome || !valor || valor <= 0) { alert('Preenche pelo menos o nome e o valor.'); return; }
+    const newDebt = {
+      id: 'custom-' + Date.now().toString(36),
+      name: nome,
+      valor,
+      kind: tipo,
+      meta: fmt(valor) + (tipo === 'ongoing' ? '/mês' : ' (quitação)') + (dia ? ' · vence dia ' + dia : ''),
+      dueDay: (dia && dia >= 1 && dia <= 31) ? dia : undefined
+    };
+    state.customDebts.push(newDebt);
+    render();
+    const ok = await saveData();
+    if (!ok) { state.customDebts.pop(); saveError = true; } else { saveError = false; }
+    render();
+  });
+
+  document.querySelectorAll('[data-custom-del]').forEach(el => el.addEventListener('click', async () => {
+    if (!confirm('Remover essa conta cadastrada?')) return;
+    const removed = state.customDebts.find(d => d.id === el.dataset.customDel);
+    state.customDebts = state.customDebts.filter(d => d.id !== el.dataset.customDel);
+    render();
+    const ok = await saveData();
+    if (!ok) { if (removed) state.customDebts.push(removed); saveError = true; } else { saveError = false; }
+    render();
+  }));
+
   document.getElementById('btn-export-json').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify({ entries: state.entries, debtStatus: state.debtStatus }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ entries: state.entries, debtStatus: state.debtStatus, customDebts: state.customDebts }, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'livro-de-contas-backup-' + new Date().toISOString().slice(0,10) + '.json';
@@ -651,11 +720,11 @@ function render() {
 
   document.getElementById('reset-link').addEventListener('click', async () => {
     if (confirm('Apagar todos os lançamentos e status de dívidas? Isso não pode ser desfeito.')) {
-      const prevEntries = state.entries, prevStatus = state.debtStatus;
-      state.entries = []; state.debtStatus = {};
+      const prevEntries = state.entries, prevStatus = state.debtStatus, prevCustom = state.customDebts;
+      state.entries = []; state.debtStatus = {}; state.customDebts = [];
       render();
       const ok = await saveData();
-      if (!ok) { state.entries = prevEntries; state.debtStatus = prevStatus; saveError = true; } else { saveError = false; }
+      if (!ok) { state.entries = prevEntries; state.debtStatus = prevStatus; state.customDebts = prevCustom; saveError = true; } else { saveError = false; }
       render();
     }
   });
