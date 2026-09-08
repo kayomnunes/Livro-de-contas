@@ -14,39 +14,29 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root {
-    --paper: #ECE6D8;
-    --paper-alt: #F6F1E6;
-    --ink: #26261F;
-    --ink-soft: #5B5A4E;
-    --line: #C9BFA8;
-    --line-strong: #A79C81;
-    --forest: #2F5233;
-    --forest-soft: #E4EBE1;
-    --rust: #9C4A3E;
-    --rust-soft: #F1E2DE;
-    --gold: #A8752E;
-    --gold-soft: #F1E5CC;
-    --serif: 'Spectral', Georgia, serif;
-    --sans: 'IBM Plex Sans', -apple-system, sans-serif;
+    --paper: #ECE6D8; --paper-alt: #F6F1E6; --ink: #26261F; --ink-soft: #5B5A4E;
+    --line: #C9BFA8; --line-strong: #A79C81; --forest: #2F5233; --forest-soft: #E4EBE1;
+    --rust: #9C4A3E; --rust-soft: #F1E2DE; --gold: #A8752E; --gold-soft: #F1E5CC;
+    --serif: 'Spectral', Georgia, serif; --sans: 'IBM Plex Sans', -apple-system, sans-serif;
   }
-
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: var(--paper); }
   body { font-family: var(--sans); color: var(--ink); }
-
   .sheet { max-width: 640px; margin: 0 auto; padding: 28px 20px 60px; background: var(--paper); min-height: 100vh; }
 
   .masthead { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 2px solid var(--ink); padding-bottom: 10px; margin-bottom: 6px; }
   .masthead h1 { font-family: var(--serif); font-weight: 600; font-size: 22px; margin: 0; letter-spacing: 0.2px; }
   .masthead .subt { font-size: 12px; color: var(--ink-soft); font-style: italic; font-family: var(--serif); }
 
-  .setup-wrap { max-width: 460px; margin: 40px auto; padding: 0 20px; }
+  .setup-wrap, .lock-wrap { max-width: 460px; margin: 40px auto; padding: 0 20px; }
   .setup-title { font-family: var(--serif); font-size: 24px; font-weight: 600; margin-bottom: 6px; }
   .setup-sub { font-size: 13px; color: var(--ink-soft); margin-bottom: 22px; line-height: 1.5; }
   .setup-field { margin-bottom: 14px; }
   .setup-field label { display: block; font-size: 12.5px; color: var(--ink-soft); margin-bottom: 5px; }
   .setup-error { background: var(--rust-soft); color: var(--rust); border: 1px solid var(--rust); padding: 10px 12px; font-size: 13px; margin-bottom: 14px; display: none; }
   .setup-error.show { display: block; }
+  .lock-pin { font-size: 28px; letter-spacing: 10px; text-align: center; }
+  .lock-skip { text-align: center; font-size: 12px; color: var(--ink-soft); text-decoration: underline; cursor: pointer; margin-top: 14px; }
 
   .tabs { display: flex; gap: 2px; margin: 18px 0 22px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
   .tabs::-webkit-scrollbar { display: none; }
@@ -76,6 +66,24 @@
   section { margin-bottom: 30px; }
   .section-title { font-family: var(--serif); font-size: 15px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--ink); padding-bottom: 6px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
 
+  .due-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .due-name { font-weight: 500; }
+  .due-days { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 12.5px; }
+  .due-days.soon { color: var(--rust); }
+  .due-days.ok { color: var(--ink-soft); }
+
+  .chart-wrap { display: flex; align-items: flex-end; gap: 6px; height: 110px; padding: 10px 0 4px; border-bottom: 1px solid var(--line-strong); }
+  .chart-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+  .chart-bar { width: 70%; min-height: 2px; }
+  .chart-bar.pos { background: var(--forest); }
+  .chart-bar.neg { background: var(--rust); }
+  .chart-labels { display: flex; gap: 6px; margin-top: 6px; }
+  .chart-labels span { flex: 1; text-align: center; font-size: 10.5px; color: var(--ink-soft); }
+
+  .cat-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; font-size: 13px; border-bottom: 1px solid var(--line); }
+  .cat-bar-track { flex: 1; height: 6px; background: var(--paper-alt); margin: 0 10px; border: 1px solid var(--line); overflow: hidden; }
+  .cat-bar-fill { height: 100%; background: var(--gold); }
+
   .form-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
   .form-row.two > * { flex: 1; min-width: 130px; }
 
@@ -95,8 +103,8 @@
     font-family: var(--sans); font-weight: 500; font-size: 14px; cursor: pointer; margin-top: 4px;
   }
   button.add-btn:active, button.setup-btn:active, button.action-btn:active { opacity: 0.85; }
-
   button.action-btn.secondary { background: var(--paper-alt); color: var(--ink); border: 1px solid var(--line-strong); }
+  .cancel-edit { text-align: center; font-size: 12px; color: var(--ink-soft); text-decoration: underline; cursor: pointer; margin-top: 8px; }
 
   .entry-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; gap: 8px; }
   .entry-left { display: flex; flex-direction: column; }
@@ -104,7 +112,8 @@
   .entry-val { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
   .entry-val.in { color: var(--forest); }
   .entry-val.out { color: var(--rust); }
-  .entry-del { cursor: pointer; color: var(--ink-soft); font-size: 12px; margin-left: 6px; }
+  .entry-actions { display: flex; align-items: center; gap: 8px; }
+  .entry-edit, .entry-del { cursor: pointer; color: var(--ink-soft); font-size: 12px; }
 
   .empty-note { font-size: 13px; color: var(--ink-soft); font-style: italic; padding: 10px 0; }
 
@@ -116,8 +125,10 @@
   .status-quitado { background: var(--forest-soft); color: var(--forest); }
   .status-ativo { background: var(--gold-soft); color: var(--gold); }
   .status-atencao { background: var(--rust-soft); color: var(--rust); }
-  .debt-check { font-size: 12px; color: var(--ink-soft); cursor: pointer; display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+  .debt-bottom { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; flex-wrap: wrap; gap: 8px; }
+  .debt-check { font-size: 12px; color: var(--ink-soft); cursor: pointer; display: flex; align-items: center; gap: 6px; }
   .debt-check input { width: 14px; height: 14px; padding: 0; }
+  .quick-btn { font-size: 11.5px; padding: 5px 10px; background: var(--forest-soft); color: var(--forest); border: 1px solid var(--forest); cursor: pointer; font-family: var(--sans); }
 
   .export-row { display: flex; gap: 8px; flex-wrap: wrap; }
   .export-row button { flex: 1; min-width: 150px; }
@@ -126,7 +137,7 @@
   .copy-confirm.show { display: block; }
 
   footer { text-align: center; font-size: 11px; color: var(--ink-soft); margin-top: 34px; font-style: italic; font-family: var(--serif); }
-  .reset-link, .switch-link { text-align: center; font-size: 11px; color: var(--ink-soft); text-decoration: underline; cursor: pointer; margin-top: 6px; }
+  .reset-link, .switch-link, .pin-link { text-align: center; font-size: 11px; color: var(--ink-soft); text-decoration: underline; cursor: pointer; margin-top: 6px; }
 
   .save-error { background: var(--rust-soft); color: var(--rust); border: 1px solid var(--rust); padding: 10px 14px; font-size: 13px; margin: 14px 0; display: none; }
   .save-error.show { display: block; }
@@ -144,12 +155,27 @@
 </div>
 
 <script>
-const MONTH_DEFS = [
-  ['2026-10','Out/26'], ['2026-11','Nov/26'], ['2026-12','Dez/26'], ['2027-01','Jan/27'],
-  ['2027-02','Fev/27'], ['2027-03','Mar/27'], ['2027-04','Abr/27'], ['2027-05','Mai/27'],
-  ['2027-06','Jun/27'], ['2027-07','Jul/27'], ['2027-08','Ago/27'], ['2027-09','Set/27'],
-  ['2027-10','Out/27'], ['2027-11','Nov/27'], ['2027-12','Dez/27']
-];
+const START_YEAR = 2026, START_MONTH = 10;
+const MONTH_ABBR = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+function generateMonthDefs() {
+  const now = new Date();
+  const minEnd = new Date(2027, 11, 1);
+  const rollingEnd = new Date(now.getFullYear(), now.getMonth() + 6, 1);
+  const end = rollingEnd > minEnd ? rollingEnd : minEnd;
+  const defs = [];
+  let y = START_YEAR, mo = START_MONTH;
+  while (y < end.getFullYear() || (y === end.getFullYear() && mo <= end.getMonth() + 1)) {
+    const key = y + '-' + String(mo).padStart(2, '0');
+    const label = MONTH_ABBR[mo - 1] + '/' + String(y).slice(2);
+    defs.push([key, label]);
+    mo++;
+    if (mo > 12) { mo = 1; y++; }
+  }
+  return defs;
+}
+
+const MONTH_DEFS = generateMonthDefs();
 const MONTHS = MONTH_DEFS.map(d => d[0]);
 const MONTH_LABELS = Object.fromEntries(MONTH_DEFS);
 const OLD_KEY_MAP = { out: '2026-10', nov: '2026-11', dez: '2026-12', jan: '2027-01' };
@@ -167,26 +193,31 @@ function biancaForMonth(m) { const i = monthIndex(m); if (i <= 3) return 200; if
 function noverdeForMonth(m) { const i = monthIndex(m); return i <= 10 ? 260.46 : 0; }
 function fixedObrigacoes(m) { return biancaForMonth(m) + noverdeForMonth(m); }
 
+// dueDay: dia do mês do vencimento (aproximado p/ Bianca)
 const DEBTS = [
-  { id: 'bianca', name: 'Bianca', meta: 'R$200/mês até jan · cai pra R$60 em fev', kind: 'ongoing' },
-  { id: 'emp1', name: 'Nubank — Empréstimo 1', meta: 'Quitação R$1.719,63', kind: 'checkable' },
-  { id: 'fatura', name: 'Nubank — Fatura', meta: 'Rolada de out. pra nov. (R$2.001,44)', kind: 'ongoing' },
-  { id: 'emp2', name: 'Nubank — Empréstimo 2', meta: 'Quitação ~R$558,50 (confirmar no app)', kind: 'checkable' },
-  { id: 'noverde', name: 'Noverde — Empréstimo 3', meta: 'Sem resposta — tentar consumidor.gov.br', kind: 'checkable', label: 'Consegui contato' },
-  { id: 'nov99', name: '99 — Empréstimo 4', meta: 'Última parcela R$318,69', kind: 'checkable' },
+  { id: 'bianca', name: 'Bianca', meta: 'R$200/mês até jan · cai pra R$60 em fev', kind: 'ongoing', dueDay: 8, quickCat: 'Dívida fixa', quickVal: (m) => biancaForMonth(m) },
+  { id: 'emp1', name: 'Nubank — Empréstimo 1', meta: 'Quitação R$1.719,63', kind: 'checkable', quickCat: 'Dívida fixa', quickVal: () => 1719.63 },
+  { id: 'fatura', name: 'Nubank — Fatura', meta: 'Rolada de out. pra nov. (R$2.001,44)', kind: 'ongoing', dueDay: 14, quickCat: 'Dívida fixa', quickVal: () => 2001.44 },
+  { id: 'emp2', name: 'Nubank — Empréstimo 2', meta: 'Quitação ~R$558,50 (confirmar no app)', kind: 'checkable', dueDay: 5, quickCat: 'Dívida fixa', quickVal: () => 558.50 },
+  { id: 'noverde', name: 'Noverde — Empréstimo 3', meta: 'Sem resposta — tentar consumidor.gov.br', kind: 'checkable', label: 'Consegui contato', dueDay: 26, quickCat: 'Dívida fixa', quickVal: () => 260.46 },
+  { id: 'nov99', name: '99 — Empréstimo 4', meta: 'Última parcela R$318,69', kind: 'checkable', dueDay: 10, quickCat: 'Dívida fixa', quickVal: () => 318.69 },
 ];
 
 const SAVINGS_GOAL = 20000;
 const SAVINGS_DEADLINE = 'dezembro de 2027';
 const CONFIG_KEY = 'kayo-financas-config';
+const PIN_KEY = 'kayo-financas-pin';
 const TABLE = 'financas';
 
 let cfg = null;
 let sb = null;
-let state = { entries: [], debtStatus: {}, currentMonth: '2026-10' };
+let state = { entries: [], debtStatus: {}, currentMonth: MONTHS[0] };
 let saveError = false;
 let syncing = false;
 let copyConfirmVisible = false;
+let selType = 'in';
+let editingId = null;
+let unlocked = false;
 
 function fmt(n) {
   const neg = n < 0;
@@ -195,17 +226,38 @@ function fmt(n) {
 }
 
 function loadConfig() {
-  try {
-    const raw = localStorage.getItem(CONFIG_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {}
+  try { const raw = localStorage.getItem(CONFIG_KEY); if (raw) return JSON.parse(raw); } catch (e) {}
   return null;
 }
+function saveConfig(c) { localStorage.setItem(CONFIG_KEY, JSON.stringify(c)); }
+function getPin() { try { return localStorage.getItem(PIN_KEY); } catch (e) { return null; } }
+function setPin(p) { if (p) localStorage.setItem(PIN_KEY, p); else localStorage.removeItem(PIN_KEY); }
 
-function saveConfig(c) {
-  localStorage.setItem(CONFIG_KEY, JSON.stringify(c));
+// ---------- PIN lock ----------
+function renderLock(errorMsg) {
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="lock-wrap">
+      <div class="setup-title">Livro de Contas</div>
+      <div class="setup-sub">Digite seu PIN pra abrir.</div>
+      <div class="setup-error ${errorMsg ? 'show' : ''}">${errorMsg || ''}</div>
+      <div class="setup-field">
+        <input type="password" inputmode="numeric" maxlength="8" id="pin-input" class="lock-pin" placeholder="••••">
+      </div>
+      <button class="setup-btn" id="btn-unlock">Entrar</button>
+    </div>
+  `;
+  const pinInput = document.getElementById('pin-input');
+  pinInput.focus();
+  const tryUnlock = () => {
+    if (pinInput.value === getPin()) { unlocked = true; boot(); }
+    else renderLock('PIN incorreto, tenta de novo.');
+  };
+  document.getElementById('btn-unlock').addEventListener('click', tryUnlock);
+  pinInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryUnlock(); });
 }
 
+// ---------- Setup (Supabase config) ----------
 function renderSetup(errorMsg) {
   const app = document.getElementById('app');
   app.innerHTML = `
@@ -213,18 +265,9 @@ function renderSetup(errorMsg) {
       <div class="setup-title">Livro de Contas</div>
       <div class="setup-sub">Conecte com o seu projeto Supabase pra sincronizar entre aparelhos. Cole as informações que você copiou lá.</div>
       <div class="setup-error ${errorMsg ? 'show' : ''}">${errorMsg || ''}</div>
-      <div class="setup-field">
-        <label>Project URL</label>
-        <input type="text" id="cfg-url" placeholder="https://xxxxx.supabase.co" value="${cfg && cfg.url ? cfg.url : ''}">
-      </div>
-      <div class="setup-field">
-        <label>Chave anon public</label>
-        <input type="text" id="cfg-key" placeholder="eyJhbGciOi..." value="${cfg && cfg.key ? cfg.key : ''}">
-      </div>
-      <div class="setup-field">
-        <label>Seu código de acesso pessoal</label>
-        <input type="text" id="cfg-code" placeholder="ex: kayo-financas-2026" value="${cfg && cfg.code ? cfg.code : ''}">
-      </div>
+      <div class="setup-field"><label>Project URL</label><input type="text" id="cfg-url" placeholder="https://xxxxx.supabase.co" value="${cfg && cfg.url ? cfg.url : ''}"></div>
+      <div class="setup-field"><label>Chave anon public</label><input type="text" id="cfg-key" placeholder="eyJhbGciOi..." value="${cfg && cfg.key ? cfg.key : ''}"></div>
+      <div class="setup-field"><label>Seu código de acesso pessoal</label><input type="text" id="cfg-code" placeholder="ex: kayo-financas-2026" value="${cfg && cfg.code ? cfg.code : ''}"></div>
       <button class="setup-btn" id="btn-setup">Conectar</button>
     </div>
   `;
@@ -232,10 +275,7 @@ function renderSetup(errorMsg) {
     const url = document.getElementById('cfg-url').value.trim();
     const key = document.getElementById('cfg-key').value.trim();
     const code = document.getElementById('cfg-code').value.trim();
-    if (!url || !key || !code) {
-      renderSetup('Preenche os três campos pra continuar.');
-      return;
-    }
+    if (!url || !key || !code) { renderSetup('Preenche os três campos pra continuar.'); return; }
     try {
       const testClient = window.supabase.createClient(url, key);
       const { error } = await testClient.from(TABLE).select('id').eq('id', code).maybeSingle();
@@ -279,25 +319,30 @@ async function saveData() {
       });
       if (!error) { syncing = false; return true; }
       console.error('Falha ao salvar (tentativa ' + (attempt+1) + ')', error);
-    } catch (e) {
-      console.error('Falha ao salvar (tentativa ' + (attempt+1) + ')', e);
-    }
+    } catch (e) { console.error('Falha ao salvar (tentativa ' + (attempt+1) + ')', e); }
     if (attempt === 0) await new Promise(r => setTimeout(r, 600));
   }
   syncing = false;
   return false;
 }
 
-function entriesForMonth(m) {
-  return state.entries.filter(e => e.month === m).sort((a,b) => a.date.localeCompare(b.date));
+function entriesForMonth(m) { return state.entries.filter(e => e.month === m).sort((a,b) => a.date.localeCompare(b.date)); }
+function sobraReal(m) { return entriesForMonth(m).reduce((sum, e) => sum + (e.type === 'in' ? e.valor : -e.valor), 0); }
+function totalSaved() { return state.entries.filter(e => e.cat === 'Poupança (meta 20k)' && e.type === 'out').reduce((sum, e) => sum + e.valor, 0); }
+
+function daysUntil(dueDay) {
+  const now = new Date();
+  let target = new Date(now.getFullYear(), now.getMonth(), dueDay);
+  if (target < now) target = new Date(now.getFullYear(), now.getMonth() + 1, dueDay);
+  return Math.ceil((target - now) / (1000 * 60 * 60 * 24));
 }
 
-function sobraReal(m) {
-  return entriesForMonth(m).reduce((sum, e) => sum + (e.type === 'in' ? e.valor : -e.valor), 0);
-}
-
-function totalSaved() {
-  return state.entries.filter(e => e.cat === 'Poupança (meta 20k)' && e.type === 'out').reduce((sum, e) => sum + e.valor, 0);
+function categoryBreakdown(m) {
+  const es = entriesForMonth(m).filter(e => e.type === 'out');
+  const map = {};
+  es.forEach(e => { map[e.cat] = (map[e.cat] || 0) + e.valor; });
+  const total = Object.values(map).reduce((a,b) => a+b, 0);
+  return Object.entries(map).sort((a,b) => b[1]-a[1]).map(([cat, val]) => ({ cat, val, pct: total ? (val/total*100) : 0 }));
 }
 
 function buildSummaryText() {
@@ -309,11 +354,8 @@ function buildSummaryText() {
   MONTHS.forEach(m => {
     const es = entriesForMonth(m);
     if (es.length === 0) return;
-    const sobra = sobraReal(m);
-    lines.push('--- ' + MONTH_LABELS[m] + ' — sobra: ' + fmt(sobra) + ' ---');
-    es.forEach(e => {
-      lines.push((e.type === 'in' ? '+ ' : '- ') + fmt(e.valor) + ' | ' + e.cat + (e.nota ? ' | ' + e.nota : ''));
-    });
+    lines.push('--- ' + MONTH_LABELS[m] + ' — sobra: ' + fmt(sobraReal(m)) + ' ---');
+    es.forEach(e => lines.push((e.type === 'in' ? '+ ' : '- ') + fmt(e.valor) + ' | ' + e.cat + (e.nota ? ' | ' + e.nota : '')));
   });
   lines.push('');
   lines.push('Dívidas:');
@@ -337,22 +379,26 @@ function render() {
     ? `Gastos fixos previstos: ${fmt(fixedNow)} (Bianca${noverdeForMonth(m) > 0 ? ' + Noverde' : ''}). O resto é livre pra guardar rumo ao 20k.`
     : 'Nenhuma dívida fixa prevista neste mês — foco total na meta de poupança.');
 
+  // evolution chart: current month +/- context (up to 6 months ending at current)
+  const curIdx = monthIndex(m);
+  const chartStart = Math.max(0, curIdx - 5);
+  const chartMonths = MONTHS.slice(chartStart, curIdx + 1);
+  const chartVals = chartMonths.map(cm => sobraReal(cm));
+  const maxAbs = Math.max(1, ...chartVals.map(v => Math.abs(v)));
+
+  const catBreak = categoryBreakdown(m);
+  const dueList = DEBTS.filter(d => d.dueDay).map(d => ({ ...d, days: daysUntil(d.dueDay) })).sort((a,b) => a.days - b.days);
+
   app.innerHTML = `
     <div class="masthead">
       <h1>Livro de Contas</h1>
       <span class="sync-badge"><span class="sync-dot ${syncing ? 'busy' : ''}"></span>${syncing ? 'sincronizando' : 'sincronizado'}</span>
     </div>
-    <div class="masthead" style="border-bottom:none; margin-bottom:10px;">
-      <div class="subt">plano out/26–dez/27</div>
-    </div>
+    <div class="masthead" style="border-bottom:none; margin-bottom:10px;"><div class="subt">plano contínuo desde out/26</div></div>
 
-    <div class="save-error ${saveError ? 'show' : ''}">
-      Não deu pra salvar agora — confere sua internet e tenta de novo em alguns segundos.
-    </div>
+    <div class="save-error ${saveError ? 'show' : ''}">Não deu pra salvar agora — confere sua internet e tenta de novo em alguns segundos.</div>
 
-    <div class="tabs">
-      ${MONTHS.map(mo => `<div class="tab ${mo===m?'active':''}" data-month="${mo}">${MONTH_LABELS[mo]}</div>`).join('')}
-    </div>
+    <div class="tabs">${MONTHS.map(mo => `<div class="tab ${mo===m?'active':''}" data-month="${mo}">${MONTH_LABELS[mo]}</div>`).join('')}</div>
 
     <div class="hero">
       <div class="hero-row">
@@ -372,20 +418,35 @@ function render() {
     </div>
 
     <div class="goal-box">
-      <div class="goal-top">
-        <span class="goal-title">Meta — Guardar R$ 20.000</span>
-        <span class="goal-deadline">até ${SAVINGS_DEADLINE}</span>
-      </div>
+      <div class="goal-top"><span class="goal-title">Meta — Guardar R$ 20.000</span><span class="goal-deadline">até ${SAVINGS_DEADLINE}</span></div>
       <div class="goal-bar-track"><div class="goal-bar-fill" style="width:${Math.min(100, (totalSaved()/SAVINGS_GOAL)*100)}%"></div></div>
-      <div class="goal-numbers">
-        <span>guardado: <b>${fmt(totalSaved())}</b></span>
-        <span>falta: <b>${fmt(Math.max(0, SAVINGS_GOAL - totalSaved()))}</b></span>
-      </div>
-      <div class="hero-label" style="margin-top:8px;">ritmo de referência: ~R$1.333/mês ao longo dos 15 meses do plano</div>
+      <div class="goal-numbers"><span>guardado: <b>${fmt(totalSaved())}</b></span><span>falta: <b>${fmt(Math.max(0, SAVINGS_GOAL - totalSaved()))}</b></span></div>
+      <div class="hero-label" style="margin-top:8px;">ritmo de referência: ~R$1.333/mês ao longo do plano</div>
     </div>
 
     <section>
-      <div class="section-title">Registrar lançamento</div>
+      <div class="section-title">Próximos vencimentos</div>
+      ${dueList.map(d => `
+        <div class="due-row">
+          <span class="due-name">${d.name}</span>
+          <span class="due-days ${d.days <= 3 ? 'soon' : 'ok'}">${d.days === 0 ? 'vence hoje' : 'em ' + d.days + ' dia' + (d.days === 1 ? '' : 's')}</span>
+        </div>
+      `).join('')}
+    </section>
+
+    <section>
+      <div class="section-title">Evolução da sobra</div>
+      <div class="chart-wrap">
+        ${chartVals.map(v => {
+          const h = Math.max(2, Math.round((Math.abs(v) / maxAbs) * 90));
+          return `<div class="chart-col"><div class="chart-bar ${v >= 0 ? 'pos' : 'neg'}" style="height:${h}px;"></div></div>`;
+        }).join('')}
+      </div>
+      <div class="chart-labels">${chartMonths.map(cm => `<span>${MONTH_LABELS[cm]}</span>`).join('')}</div>
+    </section>
+
+    <section>
+      <div class="section-title">${editingId ? 'Editar lançamento' : 'Registrar lançamento'}</div>
       <div class="form-row two">
         <input type="number" id="in-valor" placeholder="Valor (R$)" step="0.01" min="0">
         <input type="date" id="in-data">
@@ -405,7 +466,8 @@ function render() {
         </select>
       </div>
       <div class="form-row"><input type="text" id="in-nota" placeholder="Nota (opcional — ex: quitação Empréstimo 1)"></div>
-      <button class="add-btn" id="btn-add">+ Adicionar lançamento</button>
+      <button class="add-btn" id="btn-add">${editingId ? 'Salvar edição' : '+ Adicionar lançamento'}</button>
+      ${editingId ? '<div class="cancel-edit" id="cancel-edit">cancelar edição</div>' : ''}
     </section>
 
     <section>
@@ -416,13 +478,26 @@ function render() {
             <span>${e.nota || e.cat}</span>
             <span class="entry-cat">${formatDate(e.date)} · ${e.cat}</span>
           </div>
-          <div style="display:flex;align-items:center;">
+          <div class="entry-actions">
             <span class="entry-val ${e.type}">${e.type === 'in' ? '+' : '-'}${fmt(e.valor).replace('R$ ','')}</span>
+            <span class="entry-edit" data-id="${e.id}">✎</span>
             <span class="entry-del" data-id="${e.id}">✕</span>
           </div>
         </div>
       `).join('') : '<div class="empty-note">Nada lançado ainda neste mês.</div>'}
     </section>
+
+    ${catBreak.length ? `
+    <section>
+      <div class="section-title">Gastos por categoria — ${MONTH_LABELS[m]}</div>
+      ${catBreak.map(c => `
+        <div class="cat-row">
+          <span>${c.cat}</span>
+          <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${c.pct}%"></div></div>
+          <span>${fmt(c.val)}</span>
+        </div>
+      `).join('')}
+    </section>` : ''}
 
     <section>
       <div class="section-title">Dívidas do plano</div>
@@ -440,11 +515,14 @@ function render() {
           <div class="debt-row">
             <div class="debt-top"><span class="debt-name">${d.name}</span>${statusHtml}</div>
             <div class="debt-meta">${d.meta}</div>
-            ${d.kind === 'checkable' ? `
-              <label class="debt-check">
-                <input type="checkbox" data-debt="${d.id}" ${checked ? 'checked' : ''}>
-                ${d.label || 'Marcar como quitado'}
-              </label>` : ''}
+            <div class="debt-bottom">
+              ${d.kind === 'checkable' ? `
+                <label class="debt-check">
+                  <input type="checkbox" data-debt="${d.id}" ${checked ? 'checked' : ''}>
+                  ${d.label || 'Marcar como quitado'}
+                </label>` : '<span></span>'}
+              <button class="quick-btn" data-quick="${d.id}">Lançar ${fmt(d.quickVal(m))}</button>
+            </div>
           </div>
         `;
       }).join('')}
@@ -457,33 +535,34 @@ function render() {
         <button class="action-btn secondary" id="btn-export-copy">Copiar resumo pro chat</button>
       </div>
       <div class="copy-confirm ${copyConfirmVisible ? 'show' : ''}" id="copy-confirm">Resumo copiado — é só colar aqui na conversa com o Claude.</div>
-      <div class="export-note">O backup .json guarda tudo (dívidas, lançamentos, meta). O resumo é um texto legível pra você colar direto no chat quando quiser que eu analise.</div>
+      <div class="export-note">O backup .json guarda tudo. O resumo é um texto legível pra colar direto no chat.</div>
     </section>
 
     <div class="reset-link" id="reset-link">apagar todos os dados</div>
+    <div class="pin-link" id="pin-link">${getPin() ? 'trocar/remover PIN' : 'proteger com PIN'}</div>
     <div class="switch-link" id="switch-link">trocar de conta / configuração</div>
     <footer>sincronizado na nuvem — acesse de qualquer aparelho com o mesmo código</footer>
   `;
 
-  document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
-    state.currentMonth = t.dataset.month;
-    render();
-  }));
+  document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => { state.currentMonth = t.dataset.month; render(); }));
   const activeTab = document.querySelector('.tab.active');
   if (activeTab) activeTab.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
 
-  let selType = 'in';
-  document.getElementById('opt-in').classList.add('sel-in');
-  document.getElementById('opt-in').addEventListener('click', () => {
-    selType = 'in';
-    document.getElementById('opt-in').classList.add('sel-in');
-    document.getElementById('opt-out').classList.remove('sel-out');
-  });
-  document.getElementById('opt-out').addEventListener('click', () => {
-    selType = 'out';
-    document.getElementById('opt-out').classList.add('sel-out');
-    document.getElementById('opt-in').classList.remove('sel-in');
-  });
+  document.getElementById('opt-in').classList.toggle('sel-in', selType === 'in');
+  document.getElementById('opt-out').classList.toggle('sel-out', selType === 'out');
+  document.getElementById('opt-in').addEventListener('click', () => { selType = 'in'; render(); });
+  document.getElementById('opt-out').addEventListener('click', () => { selType = 'out'; render(); });
+
+  if (editingId) {
+    const e = state.entries.find(x => x.id === editingId);
+    if (e) {
+      document.getElementById('in-valor').value = e.valor;
+      document.getElementById('in-data').value = e.date;
+      document.getElementById('in-cat').value = e.cat;
+      document.getElementById('in-nota').value = e.nota || '';
+    }
+    document.getElementById('cancel-edit').addEventListener('click', () => { editingId = null; render(); });
+  }
 
   document.getElementById('btn-add').addEventListener('click', async () => {
     const valorEl = document.getElementById('in-valor');
@@ -493,13 +572,34 @@ function render() {
     const valor = parseFloat(valorEl.value);
     if (!valor || valor <= 0) { valorEl.style.borderColor = 'var(--rust)'; return; }
     const date = dataEl.value || new Date().toISOString().slice(0,10);
-    const entry = { id: Date.now().toString(36), month: state.currentMonth, date, type: selType, cat: catEl.value, nota: notaEl.value.trim(), valor };
-    state.entries.push(entry);
+
+    let backup = null;
+    if (editingId) {
+      const idx = state.entries.findIndex(x => x.id === editingId);
+      backup = { ...state.entries[idx] };
+      state.entries[idx] = { ...backup, date, type: selType, cat: catEl.value, nota: notaEl.value.trim(), valor };
+    } else {
+      state.entries.push({ id: Date.now().toString(36), month: state.currentMonth, date, type: selType, cat: catEl.value, nota: notaEl.value.trim(), valor });
+    }
+    const wasEditing = editingId;
+    editingId = null;
     render();
     const ok = await saveData();
-    if (!ok) { state.entries.pop(); saveError = true; } else { saveError = false; }
+    if (!ok) {
+      if (wasEditing && backup) { const idx = state.entries.findIndex(x => x.id === backup.id); state.entries[idx] = backup; }
+      else state.entries.pop();
+      saveError = true;
+    } else { saveError = false; }
     render();
   });
+
+  document.querySelectorAll('.entry-edit').forEach(el => el.addEventListener('click', () => {
+    editingId = el.dataset.id;
+    const e = state.entries.find(x => x.id === editingId);
+    if (e) selType = e.type;
+    render();
+    document.getElementById('in-valor').focus();
+  }));
 
   document.querySelectorAll('.entry-del').forEach(el => el.addEventListener('click', async () => {
     const removed = state.entries.find(e => e.id === el.dataset.id);
@@ -519,6 +619,16 @@ function render() {
     render();
   }));
 
+  document.querySelectorAll('[data-quick]').forEach(el => el.addEventListener('click', async () => {
+    const d = DEBTS.find(x => x.id === el.dataset.quick);
+    const entry = { id: Date.now().toString(36), month: state.currentMonth, date: new Date().toISOString().slice(0,10), type: 'out', cat: d.quickCat, nota: d.name, valor: d.quickVal(state.currentMonth) };
+    state.entries.push(entry);
+    render();
+    const ok = await saveData();
+    if (!ok) { state.entries.pop(); saveError = true; } else { saveError = false; }
+    render();
+  }));
+
   document.getElementById('btn-export-json').addEventListener('click', () => {
     const blob = new Blob([JSON.stringify({ entries: state.entries, debtStatus: state.debtStatus }, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
@@ -529,27 +639,20 @@ function render() {
 
   document.getElementById('btn-export-copy').addEventListener('click', async () => {
     const text = buildSummaryText();
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch (e) {
+    try { await navigator.clipboard.writeText(text); }
+    catch (e) {
       const ta = document.createElement('textarea');
-      ta.value = text;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
     }
-    copyConfirmVisible = true;
-    render();
+    copyConfirmVisible = true; render();
     setTimeout(() => { copyConfirmVisible = false; render(); }, 4000);
   });
 
   document.getElementById('reset-link').addEventListener('click', async () => {
     if (confirm('Apagar todos os lançamentos e status de dívidas? Isso não pode ser desfeito.')) {
-      const prevEntries = state.entries;
-      const prevStatus = state.debtStatus;
-      state.entries = [];
-      state.debtStatus = {};
+      const prevEntries = state.entries, prevStatus = state.debtStatus;
+      state.entries = []; state.debtStatus = {};
       render();
       const ok = await saveData();
       if (!ok) { state.entries = prevEntries; state.debtStatus = prevStatus; saveError = true; } else { saveError = false; }
@@ -557,30 +660,37 @@ function render() {
     }
   });
 
-  document.getElementById('switch-link').addEventListener('click', () => {
-    renderSetup();
+  document.getElementById('switch-link').addEventListener('click', () => renderSetup());
+
+  document.getElementById('pin-link').addEventListener('click', () => {
+    const current = getPin();
+    if (current) {
+      if (confirm('Remover a proteção por PIN?')) { setPin(null); render(); }
+    } else {
+      const p = prompt('Cria um PIN de 4 a 8 dígitos:');
+      if (p && p.trim()) { setPin(p.trim()); render(); }
+    }
   });
 }
 
-function formatDate(iso) {
-  const [y,mo,d] = iso.split('-');
-  return `${d}/${mo}`;
-}
+function formatDate(iso) { const [y,mo,d] = iso.split('-'); return `${d}/${mo}`; }
 
-(function init() {
+async function boot() {
+  const pin = getPin();
+  if (pin && !unlocked) { renderLock(); return; }
   cfg = loadConfig();
   if (cfg && cfg.url && cfg.key && cfg.code) {
     sb = window.supabase.createClient(cfg.url, cfg.key);
-    loadData();
+    await loadData();
   } else {
     renderSetup();
   }
-})();
+}
+
+boot();
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  });
+  window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
 }
 </script>
 </body>
