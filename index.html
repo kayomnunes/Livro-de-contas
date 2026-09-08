@@ -214,14 +214,15 @@ function allDebts() {
   }));
   return [...DEBTS, ...custom];
 }
-const SAVINGS_DEADLINE = 'dezembro de 2027';
+
+const DEFAULT_GOAL = { id: 'meta-20k', name: 'Guardar R$ 20.000', target: 20000, deadline: 'dezembro de 2027' };
 const CONFIG_KEY = 'kayo-financas-config';
 const PIN_KEY = 'kayo-financas-pin';
 const TABLE = 'financas';
 
 let cfg = null;
 let sb = null;
-let state = { entries: [], debtStatus: {}, customDebts: [], currentMonth: MONTHS[0] };
+let state = { entries: [], debtStatus: {}, customDebts: [], goals: [], currentMonth: MONTHS[0] };
 let saveError = false;
 let syncing = false;
 let copyConfirmVisible = false;
@@ -310,8 +311,10 @@ async function loadData() {
       state.entries = (data.payload.entries || []).map(e => ({ ...e, month: OLD_KEY_MAP[e.month] || e.month }));
       state.debtStatus = data.payload.debtStatus || {};
       state.customDebts = data.payload.customDebts || [];
+      state.goals = data.payload.goals && data.payload.goals.length ? data.payload.goals : [DEFAULT_GOAL];
     } else {
-      await sb.from(TABLE).insert({ id: cfg.code, payload: { entries: [], debtStatus: {}, customDebts: [] } });
+      state.goals = [DEFAULT_GOAL];
+      await sb.from(TABLE).insert({ id: cfg.code, payload: { entries: [], debtStatus: {}, customDebts: [], goals: state.goals } });
     }
     render();
   } catch (e) {
@@ -325,7 +328,7 @@ async function saveData() {
     try {
       const { error } = await sb.from(TABLE).upsert({
         id: cfg.code,
-        payload: { entries: state.entries, debtStatus: state.debtStatus, customDebts: state.customDebts },
+        payload: { entries: state.entries, debtStatus: state.debtStatus, customDebts: state.customDebts, goals: state.goals },
         updated_at: new Date().toISOString()
       });
       if (!error) { syncing = false; return true; }
@@ -339,7 +342,9 @@ async function saveData() {
 
 function entriesForMonth(m) { return state.entries.filter(e => e.month === m).sort((a,b) => a.date.localeCompare(b.date)); }
 function sobraReal(m) { return entriesForMonth(m).reduce((sum, e) => sum + (e.type === 'in' ? e.valor : -e.valor), 0); }
-function totalSaved() { return state.entries.filter(e => e.cat === 'Poupança (meta 20k)' && e.type === 'out').reduce((sum, e) => sum + e.valor, 0); }
+function totalSavedFor(goalId) { return state.entries.filter(e => e.cat === 'Poupança' && e.goalId === goalId && e.type === 'out').reduce((sum, e) => sum + e.valor, 0); }
+function sumIn(m) { return entriesForMonth(m).filter(e => e.type === 'in').reduce((s,e) => s + e.valor, 0); }
+function sumDebtOut(m) { return entriesForMonth(m).filter(e => e.type === 'out' && e.cat === 'Dívida fixa').reduce((s,e) => s + e.valor, 0); }
 
 function daysUntil(dueDay) {
   const now = new Date();
@@ -360,7 +365,8 @@ function buildSummaryText() {
   const lines = [];
   lines.push('Resumo do Livro de Contas — ' + new Date().toLocaleDateString('pt-BR'));
   lines.push('');
-  lines.push('Meta 20k: guardado ' + fmt(totalSaved()) + ' de ' + fmt(SAVINGS_GOAL) + ' (até ' + SAVINGS_DEADLINE + ')');
+  lines.push('Metas:');
+  state.goals.forEach(g => lines.push('- ' + g.name + ': guardado ' + fmt(totalSavedFor(g.id)) + ' de ' + fmt(g.target) + (g.deadline ? ' (até ' + g.deadline + ')' : '')));
   lines.push('');
   MONTHS.forEach(m => {
     const es = entriesForMonth(m);
@@ -429,12 +435,30 @@ function render() {
       </div>
     </div>
 
-    <div class="goal-box">
-      <div class="goal-top"><span class="goal-title">Meta — Guardar R$ 20.000</span><span class="goal-deadline">até ${SAVINGS_DEADLINE}</span></div>
-      <div class="goal-bar-track"><div class="goal-bar-fill" style="width:${Math.min(100, (totalSaved()/SAVINGS_GOAL)*100)}%"></div></div>
-      <div class="goal-numbers"><span>guardado: <b>${fmt(totalSaved())}</b></span><span>falta: <b>${fmt(Math.max(0, SAVINGS_GOAL - totalSaved()))}</b></span></div>
-      <div class="hero-label" style="margin-top:8px;">ritmo de referência: ~R$1.333/mês ao longo do plano</div>
-    </div>
+    ${state.goals.map(g => {
+      const saved = totalSavedFor(g.id);
+      return `
+      <div class="goal-box">
+        <div class="goal-top">
+          <span class="goal-title">${g.name}</span>
+          <span class="goal-deadline">${g.deadline ? 'até ' + g.deadline : ''} ${state.goals.length > 1 ? `<span class="entry-del" data-goal-del="${g.id}" style="margin-left:8px;">✕</span>` : ''}</span>
+        </div>
+        <div class="goal-bar-track"><div class="goal-bar-fill" style="width:${Math.min(100, (saved/g.target)*100)}%"></div></div>
+        <div class="goal-numbers"><span>guardado: <b>${fmt(saved)}</b></span><span>falta: <b>${fmt(Math.max(0, g.target - saved))}</b></span></div>
+      </div>`;
+    }).join('')}
+
+    <section style="margin-bottom:26px;">
+      <button class="action-btn secondary" id="btn-new-goal-toggle">+ Nova meta</button>
+      <div id="new-goal-form" style="display:none; margin-top:12px;">
+        <div class="form-row two">
+          <input type="text" id="ng-nome" placeholder="Nome da meta (ex: Viagem)">
+          <input type="number" id="ng-valor" placeholder="Valor alvo (R$)" step="0.01" min="0">
+        </div>
+        <div class="form-row"><input type="text" id="ng-prazo" placeholder="Prazo (opcional, ex: julho de 2027)"></div>
+        <button class="add-btn" id="btn-new-goal-save">Salvar meta</button>
+      </div>
+    </section>
 
     <section>
       <div class="section-title">Próximos vencimentos</div>
@@ -458,6 +482,24 @@ function render() {
     </section>
 
     <section>
+      <div class="section-title">Entradas x Dívidas pagas</div>
+      <div class="chart-wrap">
+        ${chartMonths.map(cm => {
+          const inV = sumIn(cm), debtV = sumDebtOut(cm);
+          const localMax = Math.max(1, ...chartMonths.map(x => Math.max(sumIn(x), sumDebtOut(x))));
+          const hIn = Math.max(2, Math.round((inV/localMax)*90));
+          const hDebt = Math.max(2, Math.round((debtV/localMax)*90));
+          return `<div class="chart-col"><div style="display:flex;gap:2px;align-items:flex-end;height:90px;">
+            <div class="chart-bar pos" style="width:8px;height:${hIn}px;"></div>
+            <div class="chart-bar" style="width:8px;height:${hDebt}px;background:var(--gold);"></div>
+          </div></div>`;
+        }).join('')}
+      </div>
+      <div class="chart-labels">${chartMonths.map(cm => `<span>${MONTH_LABELS[cm]}</span>`).join('')}</div>
+      <div class="hero-label" style="margin-top:6px;"><span style="color:var(--forest);">■</span> entradas &nbsp; <span style="color:var(--gold);">■</span> dívidas pagas</div>
+    </section>
+
+    <section>
       <div class="section-title">${editingId ? 'Editar lançamento' : 'Registrar lançamento'}</div>
       <div class="form-row two">
         <input type="number" id="in-valor" placeholder="Valor (R$)" step="0.01" min="0">
@@ -471,11 +513,14 @@ function render() {
         <select id="in-cat">
           <option value="Renda">Renda</option>
           <option value="Dívida fixa">Dívida fixa</option>
-          <option value="Poupança (meta 20k)">Poupança (meta 20k)</option>
+          <option value="Poupança">Poupança</option>
           <option value="Cartão alimentação">Cartão alimentação</option>
           <option value="Gasto do dia a dia">Gasto do dia a dia</option>
           <option value="Outro">Outro</option>
         </select>
+      </div>
+      <div class="form-row" id="goal-select-row" style="display:none;">
+        <select id="in-goal">${state.goals.map(g => `<option value="${g.id}">${g.name}</option>`).join('')}</select>
       </div>
       <div class="form-row"><input type="text" id="in-nota" placeholder="Nota (opcional — ex: quitação Empréstimo 1)"></div>
       <button class="add-btn" id="btn-add">${editingId ? 'Salvar edição' : '+ Adicionar lançamento'}</button>
@@ -586,6 +631,11 @@ function render() {
   document.getElementById('opt-in').addEventListener('click', () => { selType = 'in'; render(); });
   document.getElementById('opt-out').addEventListener('click', () => { selType = 'out'; render(); });
 
+  const catEl0 = document.getElementById('in-cat');
+  const goalRow = document.getElementById('goal-select-row');
+  const syncGoalRow = () => { goalRow.style.display = catEl0.value === 'Poupança' ? 'block' : 'none'; };
+  catEl0.addEventListener('change', syncGoalRow);
+
   if (editingId) {
     const e = state.entries.find(x => x.id === editingId);
     if (e) {
@@ -593,9 +643,11 @@ function render() {
       document.getElementById('in-data').value = e.date;
       document.getElementById('in-cat').value = e.cat;
       document.getElementById('in-nota').value = e.nota || '';
+      if (e.cat === 'Poupança' && e.goalId) document.getElementById('in-goal').value = e.goalId;
     }
     document.getElementById('cancel-edit').addEventListener('click', () => { editingId = null; render(); });
   }
+  syncGoalRow();
 
   document.getElementById('btn-add').addEventListener('click', async () => {
     const valorEl = document.getElementById('in-valor');
@@ -605,14 +657,15 @@ function render() {
     const valor = parseFloat(valorEl.value);
     if (!valor || valor <= 0) { valorEl.style.borderColor = 'var(--rust)'; return; }
     const date = dataEl.value || new Date().toISOString().slice(0,10);
+    const goalId = catEl.value === 'Poupança' ? document.getElementById('in-goal').value : undefined;
 
     let backup = null;
     if (editingId) {
       const idx = state.entries.findIndex(x => x.id === editingId);
       backup = { ...state.entries[idx] };
-      state.entries[idx] = { ...backup, date, type: selType, cat: catEl.value, nota: notaEl.value.trim(), valor };
+      state.entries[idx] = { ...backup, date, type: selType, cat: catEl.value, nota: notaEl.value.trim(), valor, goalId };
     } else {
-      state.entries.push({ id: Date.now().toString(36), month: state.currentMonth, date, type: selType, cat: catEl.value, nota: notaEl.value.trim(), valor });
+      state.entries.push({ id: Date.now().toString(36), month: state.currentMonth, date, type: selType, cat: catEl.value, nota: notaEl.value.trim(), valor, goalId });
     }
     const wasEditing = editingId;
     editingId = null;
@@ -662,6 +715,34 @@ function render() {
     render();
   }));
 
+  document.getElementById('btn-new-goal-toggle').addEventListener('click', () => {
+    const f = document.getElementById('new-goal-form');
+    f.style.display = f.style.display === 'none' ? 'block' : 'none';
+  });
+
+  document.getElementById('btn-new-goal-save').addEventListener('click', async () => {
+    const nome = document.getElementById('ng-nome').value.trim();
+    const valor = parseFloat(document.getElementById('ng-valor').value);
+    const prazo = document.getElementById('ng-prazo').value.trim();
+    if (!nome || !valor || valor <= 0) { alert('Preenche pelo menos o nome e o valor alvo.'); return; }
+    const newGoal = { id: 'goal-' + Date.now().toString(36), name: nome, target: valor, deadline: prazo || null };
+    state.goals.push(newGoal);
+    render();
+    const ok = await saveData();
+    if (!ok) { state.goals.pop(); saveError = true; } else { saveError = false; }
+    render();
+  });
+
+  document.querySelectorAll('[data-goal-del]').forEach(el => el.addEventListener('click', async () => {
+    if (!confirm('Remover essa meta? Os lançamentos ligados a ela continuam guardados, só param de contar pra nenhuma meta.')) return;
+    const removed = state.goals.find(g => g.id === el.dataset.goalDel);
+    state.goals = state.goals.filter(g => g.id !== el.dataset.goalDel);
+    render();
+    const ok = await saveData();
+    if (!ok) { if (removed) state.goals.push(removed); saveError = true; } else { saveError = false; }
+    render();
+  }));
+
   document.getElementById('btn-new-debt-toggle').addEventListener('click', () => {
     const f = document.getElementById('new-debt-form');
     f.style.display = f.style.display === 'none' ? 'block' : 'none';
@@ -699,7 +780,7 @@ function render() {
   }));
 
   document.getElementById('btn-export-json').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify({ entries: state.entries, debtStatus: state.debtStatus, customDebts: state.customDebts }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ entries: state.entries, debtStatus: state.debtStatus, customDebts: state.customDebts, goals: state.goals }, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'livro-de-contas-backup-' + new Date().toISOString().slice(0,10) + '.json';
