@@ -160,6 +160,8 @@
   .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--forest); display: inline-block; }
   .sync-dot.busy { background: var(--gold); }
 
+  .fab { position: fixed; bottom: 22px; right: 22px; width: 54px; height: 54px; border-radius: 50%; background: var(--ink); color: var(--paper-alt); font-size: 26px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 3px 10px rgba(0,0,0,0.3); z-index: 50; border: none; }
+
   .loading { text-align: center; padding: 40px 0; color: var(--ink-soft); font-family: var(--serif); font-style: italic; }
 </style>
 </head>
@@ -248,7 +250,7 @@ const TABLE = 'financas';
 
 let cfg = null;
 let sb = null;
-let state = { entries: [], debtStatus: {}, customDebts: [], goals: [], categoryBudgets: {}, plannedBills: [], currentMonth: MONTHS[0] };
+let state = { entries: [], debtStatus: {}, customDebts: [], goals: [], categoryBudgets: {}, plannedBills: [], customCategories: [], currentMonth: MONTHS[0] };
 let saveError = false;
 let syncing = false;
 let copyConfirmVisible = false;
@@ -340,6 +342,7 @@ async function loadData() {
       state.goals = data.payload.goals && data.payload.goals.length ? data.payload.goals : [DEFAULT_GOAL];
       state.categoryBudgets = data.payload.categoryBudgets || {};
       state.plannedBills = data.payload.plannedBills || [];
+      state.customCategories = data.payload.customCategories || [];
     } else {
       state.goals = [DEFAULT_GOAL];
       await sb.from(TABLE).insert({ id: cfg.code, payload: { entries: [], debtStatus: {}, customDebts: [], goals: state.goals } });
@@ -356,7 +359,7 @@ async function saveData() {
     try {
       const { error } = await sb.from(TABLE).upsert({
         id: cfg.code,
-        payload: { entries: state.entries, debtStatus: state.debtStatus, customDebts: state.customDebts, goals: state.goals, categoryBudgets: state.categoryBudgets, plannedBills: state.plannedBills },
+        payload: { entries: state.entries, debtStatus: state.debtStatus, customDebts: state.customDebts, goals: state.goals, categoryBudgets: state.categoryBudgets, plannedBills: state.plannedBills, customCategories: state.customCategories },
         updated_at: new Date().toISOString()
       });
       if (!error) { syncing = false; return true; }
@@ -491,6 +494,40 @@ function render() {
       </div>
     </div>
 
+    <section id="entry-form-section">
+      <div class="section-title">${editingId ? 'Editar lançamento' : 'Registrar lançamento'}</div>
+      <div class="form-row two">
+        <input type="number" id="in-valor" placeholder="Valor (R$)" step="0.01" min="0">
+        <input type="date" id="in-data">
+      </div>
+      <div class="form-row two">
+        <div class="toggle-group">
+          <div class="toggle-opt" id="opt-in" data-t="in">Entrada</div>
+          <div class="toggle-opt" id="opt-out" data-t="out">Saída</div>
+        </div>
+        <select id="in-cat">
+          <option value="Renda">Renda</option>
+          <option value="Dívida fixa">Dívida fixa</option>
+          <option value="Poupança">Poupança</option>
+          <option value="Cartão alimentação">Cartão alimentação</option>
+          <option value="Transporte">Transporte</option>
+          <option value="Lazer">Lazer</option>
+          <option value="Assinaturas">Assinaturas</option>
+          <option value="Compras">Compras</option>
+          <option value="Saúde">Saúde</option>
+          ${state.customCategories.map(c => `<option value="${c}">${c}</option>`).join('')}
+          <option value="Outro">Outro</option>
+          <option value="__new__">+ Nova categoria...</option>
+        </select>
+      </div>
+      <div class="form-row" id="goal-select-row" style="display:none;">
+        <select id="in-goal">${state.goals.map(g => `<option value="${g.id}">${g.name}</option>`).join('')}</select>
+      </div>
+      <div class="form-row"><input type="text" id="in-nota" placeholder="Nota (opcional — ex: quitação Empréstimo 1)"></div>
+      <button class="add-btn" id="btn-add">${editingId ? 'Salvar edição' : '+ Adicionar lançamento'}</button>
+      ${editingId ? '<div class="cancel-edit" id="cancel-edit">cancelar edição</div>' : ''}
+    </section>
+
     <div class="proj-box">
       <div class="section-title" style="border:none; margin-bottom:8px; padding-bottom:0;">Projeção de ${MONTH_LABELS[m]}</div>
       ${pendingBills.length ? pendingBills.map(b => `
@@ -597,38 +634,6 @@ function render() {
     </section>
 
     <section>
-      <div class="section-title">${editingId ? 'Editar lançamento' : 'Registrar lançamento'}</div>
-      <div class="form-row two">
-        <input type="number" id="in-valor" placeholder="Valor (R$)" step="0.01" min="0">
-        <input type="date" id="in-data">
-      </div>
-      <div class="form-row two">
-        <div class="toggle-group">
-          <div class="toggle-opt" id="opt-in" data-t="in">Entrada</div>
-          <div class="toggle-opt" id="opt-out" data-t="out">Saída</div>
-        </div>
-        <select id="in-cat">
-          <option value="Renda">Renda</option>
-          <option value="Dívida fixa">Dívida fixa</option>
-          <option value="Poupança">Poupança</option>
-          <option value="Cartão alimentação">Cartão alimentação</option>
-          <option value="Transporte">Transporte</option>
-          <option value="Lazer">Lazer</option>
-          <option value="Assinaturas">Assinaturas</option>
-          <option value="Compras">Compras</option>
-          <option value="Saúde">Saúde</option>
-          <option value="Outro">Outro</option>
-        </select>
-      </div>
-      <div class="form-row" id="goal-select-row" style="display:none;">
-        <select id="in-goal">${state.goals.map(g => `<option value="${g.id}">${g.name}</option>`).join('')}</select>
-      </div>
-      <div class="form-row"><input type="text" id="in-nota" placeholder="Nota (opcional — ex: quitação Empréstimo 1)"></div>
-      <button class="add-btn" id="btn-add">${editingId ? 'Salvar edição' : '+ Adicionar lançamento'}</button>
-      ${editingId ? '<div class="cancel-edit" id="cancel-edit">cancelar edição</div>' : ''}
-    </section>
-
-    <section>
       <div class="section-title">Lançamentos de ${MONTH_LABELS[m]}</div>
       ${hasEntries ? entriesForMonth(m).map(e => `
         <div class="entry-row">
@@ -726,7 +731,13 @@ function render() {
     <div class="pin-link" id="pin-link">${getPin() ? 'trocar/remover PIN' : 'proteger com PIN'}</div>
     <div class="switch-link" id="switch-link">trocar de conta / configuração</div>
     <footer>sincronizado na nuvem — acesse de qualquer aparelho com o mesmo código</footer>
+    <button class="fab" id="fab-add" title="Adicionar lançamento">+</button>
   `;
+
+  document.getElementById('fab-add').addEventListener('click', () => {
+    document.getElementById('entry-form-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => document.getElementById('in-valor').focus(), 400);
+  });
 
   document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => { state.currentMonth = t.dataset.month; render(); }));
   const activeTab = document.querySelector('.tab.active');
@@ -740,7 +751,25 @@ function render() {
   const catEl0 = document.getElementById('in-cat');
   const goalRow = document.getElementById('goal-select-row');
   const syncGoalRow = () => { goalRow.style.display = catEl0.value === 'Poupança' ? 'block' : 'none'; };
-  catEl0.addEventListener('change', syncGoalRow);
+  catEl0.addEventListener('change', async () => {
+    if (catEl0.value === '__new__') {
+      const nome = prompt('Nome da nova categoria:');
+      if (nome && nome.trim()) {
+        const trimmed = nome.trim();
+        if (!state.customCategories.includes(trimmed)) {
+          state.customCategories.push(trimmed);
+          await saveData();
+        }
+        render();
+        document.getElementById('in-cat').value = trimmed;
+        syncGoalRow();
+        return;
+      } else {
+        catEl0.value = 'Outro';
+      }
+    }
+    syncGoalRow();
+  });
 
   if (editingId) {
     const e = state.entries.find(x => x.id === editingId);
@@ -944,7 +973,7 @@ function render() {
   }));
 
   document.getElementById('btn-export-json').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify({ entries: state.entries, debtStatus: state.debtStatus, customDebts: state.customDebts, goals: state.goals, categoryBudgets: state.categoryBudgets, plannedBills: state.plannedBills }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ entries: state.entries, debtStatus: state.debtStatus, customDebts: state.customDebts, goals: state.goals, categoryBudgets: state.categoryBudgets, plannedBills: state.plannedBills, customCategories: state.customCategories }, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'livro-de-contas-backup-' + new Date().toISOString().slice(0,10) + '.json';
