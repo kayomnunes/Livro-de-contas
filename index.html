@@ -19,6 +19,18 @@
     --rust: #E2695C; --rust-soft: rgba(226,105,92,0.16); --gold: #D4A544; --gold-soft: rgba(212,165,68,0.16);
     --serif: 'Spectral', Georgia, serif; --sans: 'IBM Plex Sans', -apple-system, sans-serif;
   }
+  body.light-mode {
+    --paper: #F4F6FA; --paper-alt: #FFFFFF; --ink: #1C2233; --ink-soft: #7C8598;
+    --line: #E7EAF1; --line-strong: #D3D9E4; --forest: #1FB672; --forest-soft: rgba(31,182,114,0.12);
+    --rust: #F0483E; --rust-soft: rgba(240,72,62,0.12); --gold: #2E6FF2; --gold-soft: rgba(46,111,242,0.12);
+  }
+  body.light-mode .hero, body.light-mode .goal-box, body.light-mode .proj-box, body.light-mode .debt-total-box { box-shadow: 0 2px 14px rgba(28,34,51,0.06); }
+  body.light-mode .hero, body.light-mode .goal-box, body.light-mode .proj-box, body.light-mode .debt-total-box,
+  body.light-mode .tab, body.light-mode input, body.light-mode select, body.light-mode button.add-btn,
+  body.light-mode button.action-btn, body.light-mode .quick-btn, body.light-mode .bill-pay-btn { border-radius: 14px; }
+  body.light-mode .tabs { gap: 6px; }
+  body.light-mode .debt-total-box, body.light-mode .hero, body.light-mode .goal-box, body.light-mode .proj-box { border: none; }
+  body.light-mode .bottom-nav { border-top: 1px solid var(--line); box-shadow: 0 -2px 14px rgba(28,34,51,0.06); }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: var(--paper); }
   body { font-family: var(--sans); color: var(--ink); }
@@ -166,6 +178,42 @@
   .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--forest); display: inline-block; }
   .sync-dot.busy { background: var(--gold); }
 
+  .flow-pills { display: flex; gap: 10px; margin-top: 12px; }
+  .flow-pill { flex: 1; border-radius: 12px; padding: 10px 12px; }
+  .flow-pill.in { background: var(--forest-soft); }
+  .flow-pill.out { background: var(--rust-soft); }
+  .flow-pill-label { font-size: 11px; color: var(--ink-soft); display: flex; align-items: center; gap: 5px; }
+  .flow-pill-val { font-family: var(--serif); font-weight: 600; font-size: 16px; margin-top: 2px; }
+  .flow-pill.in .flow-pill-val { color: var(--forest); }
+  .flow-pill.out .flow-pill-val { color: var(--rust); }
+  .flow-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .flow-dot.in { background: var(--forest); }
+  .flow-dot.out { background: var(--rust); }
+
+  .donut-wrap { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .donut-legend { flex: 1; min-width: 140px; }
+  .legend-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 4px 0; }
+  .legend-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+  .legend-name { flex: 1; }
+  .legend-val { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .theme-toggle { cursor: pointer; font-size: 16px; padding: 4px 8px; }
+
+  .txn-day { font-size: 11.5px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.4px; margin: 14px 0 4px; font-weight: 600; }
+  .txn-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .txn-icon { width: 34px; height: 34px; border-radius: 10px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; font-size: 15px; }
+  .txn-mid { flex: 1; min-width: 0; }
+  .txn-name { font-size: 13.5px; font-weight: 500; }
+  .txn-sub { font-size: 11px; color: var(--ink-soft); }
+  .txn-val { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .ai-box { border: 1px solid var(--line-strong); background: var(--paper-alt); padding: 16px 18px; margin-bottom: 18px; border-radius: 14px; }
+  .ai-loading { text-align: center; padding: 14px 0; color: var(--ink-soft); font-style: italic; font-size: 13px; }
+  .ai-error { background: var(--rust-soft); color: var(--rust); padding: 10px 12px; font-size: 13px; margin-top: 10px; }
+  .ai-preview { background: var(--forest-soft); border: 1px solid var(--forest); padding: 12px 14px; margin-top: 12px; }
+  .ai-preview-row { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; }
+  .ai-preview-row b { color: var(--ink); }
+
   .loading { text-align: center; padding: 40px 0; color: var(--ink-soft); font-family: var(--serif); font-style: italic; }
 </style>
 </head>
@@ -247,21 +295,161 @@ function allDebts() {
   return [...DEBTS, ...custom];
 }
 
-const DEFAULT_GOAL = { id: 'meta-20k', name: 'Guardar R$ 20.000', target: 20000, deadline: 'dezembro de 2027' };
+const CAT_COLORS = ['#2E6FF2', '#1FB672', '#F0483E', '#D4A544', '#8B5CF6', '#0EA5B7', '#F97316', '#7C8598'];
+function colorForCat(cat, idx) { return CAT_COLORS[idx % CAT_COLORS.length]; }
+
+function buildDonutSVG(catBreak) {
+  if (!catBreak.length) return '';
+  const total = catBreak.reduce((s,c) => s + c.val, 0);
+  const r = 40, cx = 50, cy = 50, circ = 2 * Math.PI * r;
+  let offset = 0;
+  const arcs = catBreak.map((c, i) => {
+    const frac = total ? c.val / total : 0;
+    const dash = frac * circ;
+    const el = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${colorForCat(c.cat,i)}" stroke-width="16" stroke-dasharray="${dash} ${circ-dash}" stroke-dashoffset="${-offset}" transform="rotate(-90 ${cx} ${cy})"/>`;
+    offset += dash;
+    return el;
+  }).join('');
+  return `<svg viewBox="0 0 100 100" width="120" height="120">${arcs}</svg>`;
+}
+
+function getTheme() { try { return localStorage.getItem('kayo-financas-theme') || 'light'; } catch(e) { return 'light'; } }
+function setTheme(t) { try { localStorage.setItem('kayo-financas-theme', t); } catch(e) {} document.body.classList.toggle('light-mode', t === 'light'); }
 const CONFIG_KEY = 'kayo-financas-config';
 const PIN_KEY = 'kayo-financas-pin';
 const TABLE = 'financas';
 
 let cfg = null;
 let sb = null;
-let state = { entries: [], debtStatus: {}, customDebts: [], goals: [], categoryBudgets: {}, plannedBills: [], customCategories: [], currentMonth: MONTHS[0] };
+let state = { entries: [], debtStatus: {}, customDebts: [], goals: [], categoryBudgets: {}, plannedBills: [], customCategories: [], ignoredRecurrences: [], split: { nameA: 'Você', nameB: 'Outra pessoa', incomeA: null, incomeB: null }, currentMonth: MONTHS[0] };
 let saveError = false;
 let syncing = false;
 let copyConfirmVisible = false;
 let selType = 'in';
+function recurringKey(e) { return e.cat + '|' + (e.nota || '').trim().toLowerCase(); }
+
+function detectRecurring() {
+  const idx = monthIndex(state.currentMonth);
+  const window = MONTHS.slice(Math.max(0, idx - 2), idx + 1); // últimos 3 meses até o atual
+  if (window.length < 2) return [];
+  const byKey = {};
+  window.forEach(m => {
+    entriesForMonth(m).filter(e => e.type === 'out').forEach(e => {
+      const k = recurringKey(e);
+      byKey[k] = byKey[k] || {};
+      byKey[k][m] = (byKey[k][m] || 0) + e.valor;
+    });
+  });
+  const results = [];
+  Object.keys(byKey).forEach(k => {
+    if (state.ignoredRecurrences.includes(k)) return;
+    const monthsPresent = window.filter(m => byKey[k][m] !== undefined);
+    if (monthsPresent.length >= 2) {
+      const vals = monthsPresent.map(m => byKey[k][m]);
+      const last = vals[vals.length - 1], prev = vals[vals.length - 2];
+      const changed = prev && Math.abs(last - prev) / prev > 0.03;
+      const [cat, nota] = k.split('|');
+      results.push({ key: k, cat, nota: nota || cat, count: monthsPresent.length, lastVal: last, prevVal: prev, changed });
+    }
+  });
+  return results.sort((a,b) => b.count - a.count);
+}
+
+function calcSplit(total, incomeA, incomeB) {
+  const sum = (incomeA || 0) + (incomeB || 0);
+  if (!sum) return { shareA: 0.5, shareB: 0.5, amtA: total / 2, amtB: total / 2 };
+  const shareA = incomeA / sum, shareB = incomeB / sum;
+  return { shareA, shareB, amtA: total * shareA, amtB: total * shareB };
+}
+
+function parseBRNumber(str) {
+  if (str === undefined || str === null) return NaN;
+  let s = String(str).trim().replace(/[R$\s]/g, '');
+  if (s.includes(',') && s.includes('.')) s = s.replace(/\./g, '').replace(',', '.');
+  else if (s.includes(',')) s = s.replace(',', '.');
+  return parseFloat(s);
+}
+
+function normalizeDateStr(s) {
+  s = s.trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (m) {
+    let [, d, mo, y] = m;
+    if (y.length === 2) y = '20' + y;
+    return `${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}`;
+  }
+  return null;
+}
+
+function parseCSVStatement(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  const out = [];
+  lines.forEach(line => {
+    const sep = line.includes(';') ? ';' : ',';
+    const cols = line.split(sep).map(c => c.trim().replace(/^"|"$/g, ''));
+    let date = null, valor = null, nota = [];
+    cols.forEach(c => {
+      if (!date) { const dt = normalizeDateStr(c); if (dt) { date = dt; return; } }
+      const num = parseBRNumber(c);
+      if (valor === null && !isNaN(num) && /[\d]/.test(c) && (c.includes(',') || c.includes('.') || /^-?\d+$/.test(c))) {
+        if (Math.abs(num) > 0 && Math.abs(num) < 10000000) { valor = num; return; }
+      }
+      if (c) nota.push(c);
+    });
+    if (date && valor !== null && !isNaN(valor)) {
+      out.push({ date, valor: Math.abs(valor), type: valor >= 0 ? 'in' : 'out', nota: nota.join(' ').slice(0, 60) });
+    }
+  });
+  return out;
+}
+
+function parseOFXStatement(text) {
+  const out = [];
+  const blocks = text.split(/<STMTTRN>/i).slice(1);
+  blocks.forEach(b => {
+    const get = (tag) => { const m = b.match(new RegExp('<' + tag + '>([^<\\r\\n]+)', 'i')); return m ? m[1].trim() : null; };
+    const dtRaw = get('DTPOSTED');
+    const amt = get('TRNAMT');
+    const memo = get('MEMO') || get('NAME') || '';
+    if (dtRaw && amt) {
+      const date = dtRaw.length >= 8 ? `${dtRaw.slice(0,4)}-${dtRaw.slice(4,6)}-${dtRaw.slice(6,8)}` : null;
+      const valor = parseFloat(amt);
+      if (date && !isNaN(valor)) out.push({ date, valor: Math.abs(valor), type: valor >= 0 ? 'in' : 'out', nota: memo.slice(0,60) });
+    }
+  });
+  return out;
+}
+
+async function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function callFinancasAI(message, imageFile) {
+  const body = { message };
+  if (imageFile) {
+    body.image = await fileToBase64(imageFile);
+    body.mimeType = imageFile.type || 'image/jpeg';
+  }
+  const { data, error } = await sb.functions.invoke('financas-ai', { body });
+  if (error) throw error;
+  return data;
+}
+
+let importStaged = [];
 let editingId = null;
 let unlocked = false;
 let currentView = 'dashboard';
+let lancarMode = 'form';
+let aiLoading = false;
+let aiError = null;
+let aiPreview = null;
 
 function fmt(n) {
   const neg = n < 0;
@@ -348,6 +536,8 @@ async function loadData() {
       state.categoryBudgets = data.payload.categoryBudgets || {};
       state.plannedBills = data.payload.plannedBills || [];
       state.customCategories = data.payload.customCategories || [];
+      state.ignoredRecurrences = data.payload.ignoredRecurrences || [];
+      state.split = data.payload.split || { nameA: 'Você', nameB: 'Outra pessoa', incomeA: null, incomeB: null };
     } else {
       state.goals = [DEFAULT_GOAL];
       await sb.from(TABLE).insert({ id: cfg.code, payload: { entries: [], debtStatus: {}, customDebts: [], goals: state.goals } });
@@ -364,7 +554,7 @@ async function saveData() {
     try {
       const { error } = await sb.from(TABLE).upsert({
         id: cfg.code,
-        payload: { entries: state.entries, debtStatus: state.debtStatus, customDebts: state.customDebts, goals: state.goals, categoryBudgets: state.categoryBudgets, plannedBills: state.plannedBills, customCategories: state.customCategories },
+        payload: { entries: state.entries, debtStatus: state.debtStatus, customDebts: state.customDebts, goals: state.goals, categoryBudgets: state.categoryBudgets, plannedBills: state.plannedBills, customCategories: state.customCategories, ignoredRecurrences: state.ignoredRecurrences, split: state.split },
         updated_at: new Date().toISOString()
       });
       if (!error) { syncing = false; return true; }
@@ -457,6 +647,7 @@ function render() {
   const debtsAll = allDebts();
   const dueList = debtsAll.filter(d => d.dueDay).map(d => ({ ...d, days: daysUntil(d.dueDay) })).sort((a,b) => a.days - b.days);
   const totalDebt = totalDebtRemaining();
+  const recurring = detectRecurring();
   const pendingBills = pendingBillsForMonth(m);
   const totalPending = totalPendingForMonth(m);
   const disponivel = real;
@@ -465,7 +656,10 @@ function render() {
   app.innerHTML = `
     <div class="masthead">
       <h1>Livro de Contas</h1>
-      <span class="sync-badge"><span class="sync-dot ${syncing ? 'busy' : ''}"></span>${syncing ? 'sincronizando' : 'sincronizado'}</span>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="theme-toggle" id="theme-toggle">${getTheme()==='light' ? '🌙' : '☀️'}</span>
+        <span class="sync-badge"><span class="sync-dot ${syncing ? 'busy' : ''}"></span>${syncing ? 'sincronizando' : 'sincronizado'}</span>
+      </div>
     </div>
     <div class="masthead" style="border-bottom:none; margin-bottom:10px;"><div class="subt">plano contínuo desde out/26</div></div>
 
@@ -489,6 +683,10 @@ function render() {
           <div class="hero-label">${hasEntries ? 'sobra registrada em ' + MONTH_LABELS[m] : 'nenhum lançamento ainda em ' + MONTH_LABELS[m]}</div>
         </div>
         ${hasTarget ? `<div class="hero-plan">meta do plano<strong>${fmt(target)}</strong></div>` : ''}
+      </div>
+      <div class="flow-pills">
+        <div class="flow-pill in"><div class="flow-pill-label"><span class="flow-dot in"></span>Entradas</div><div class="flow-pill-val">${fmt(sumIn(m))}</div></div>
+        <div class="flow-pill out"><div class="flow-pill-label"><span class="flow-dot out"></span>Despesas</div><div class="flow-pill-val">${fmt(entriesForMonth(m).filter(e=>e.type==='out').reduce((s,e)=>s+e.valor,0))}</div></div>
       </div>
       <div class="diff-note">
         <b>${noteText}</b><br>
@@ -551,6 +749,23 @@ function render() {
       `).join('')}
     </section>
 
+    ${recurring.length ? `
+    <section>
+      <div class="section-title">Recorrências detectadas</div>
+      ${recurring.map(r => `
+        <div class="due-row" style="flex-wrap:wrap; align-items:flex-start;">
+          <div>
+            <div class="due-name">${r.nota}</div>
+            <div class="txn-sub">${r.cat} · apareceu em ${r.count} dos últimos meses${r.changed ? ` · valor mudou de ${fmt(r.prevVal)} pra ${fmt(r.lastVal)}` : ''}</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="due-days ok">${fmt(r.lastVal)}</span>
+            <span class="entry-del" data-ignore-rec="${r.key}" title="Ignorar">✕</span>
+          </div>
+        </div>
+      `).join('')}
+    </section>` : ''}
+
     <section>
       <div class="section-title">Evolução da sobra</div>
       <div class="chart-wrap">
@@ -582,6 +797,36 @@ function render() {
     ` : ''}
 
     ${currentView === 'lancar' ? `
+    <div class="toggle-group" style="margin-bottom:16px;">
+      <div class="toggle-opt ${lancarMode==='form' ? 'sel-in' : ''}" id="mode-form">Formulário</div>
+      <div class="toggle-opt ${lancarMode==='ai' ? 'sel-in' : ''}" id="mode-ai">Assistente (beta)</div>
+    </div>
+
+    ${lancarMode === 'ai' ? `
+    <div class="ai-box">
+      <div class="section-title" style="border:none; margin-bottom:8px; padding-bottom:0;">Descreva o gasto ou envie uma foto do recibo</div>
+      <div class="form-row"><input type="text" id="ai-msg" placeholder="ex: gastei 45 no mercado hoje"></div>
+      <div class="form-row two">
+        <input type="file" id="ai-photo" accept="image/*" capture="environment">
+        <button class="add-btn" id="ai-send" style="margin-top:0;">Enviar</button>
+      </div>
+      ${aiLoading ? '<div class="ai-loading">Analisando…</div>' : ''}
+      ${aiError ? `<div class="ai-error">${aiError}</div>` : ''}
+      ${aiPreview ? `
+        <div class="ai-preview">
+          <div class="ai-preview-row"><span>Valor</span><b>${fmt(aiPreview.valor)}</b></div>
+          <div class="ai-preview-row"><span>Tipo</span><b>${aiPreview.tipo === 'in' ? 'Entrada' : 'Saída'}</b></div>
+          <div class="ai-preview-row"><span>Categoria</span><b>${aiPreview.categoria}</b></div>
+          <div class="ai-preview-row"><span>Descrição</span><b>${aiPreview.nota || '-'}</b></div>
+          <button class="add-btn" id="ai-confirm" style="margin-top:10px;">Confirmar e salvar</button>
+          <div class="cancel-edit" id="ai-discard">descartar</div>
+        </div>
+      ` : ''}
+    </div>
+    ` : ''}
+    ` : ''}
+
+    ${currentView === 'lancar' && lancarMode === 'form' ? `
     <section id="entry-form-section">
       <div class="section-title">${editingId ? 'Editar lançamento' : 'Registrar lançamento'}</div>
       <div class="form-row two">
@@ -618,36 +863,57 @@ function render() {
 
     <section>
       <div class="section-title">Lançamentos de ${MONTH_LABELS[m]}</div>
-      ${hasEntries ? entriesForMonth(m).map(e => `
-        <div class="entry-row">
-          <div class="entry-left">
-            <span>${e.nota || e.cat}</span>
-            <span class="entry-cat">${formatDate(e.date)} · ${e.cat}</span>
-          </div>
-          <div class="entry-actions">
-            <span class="entry-val ${e.type}">${e.type === 'in' ? '+' : '-'}${fmt(e.valor).replace('R$ ','')}</span>
-            <span class="entry-edit" data-id="${e.id}">✎</span>
-            <span class="entry-del" data-id="${e.id}">✕</span>
-          </div>
-        </div>
-      `).join('') : '<div class="empty-note">Nada lançado ainda neste mês.</div>'}
+      ${hasEntries ? (() => {
+        const grouped = {};
+        entriesForMonth(m).slice().reverse().forEach(e => { (grouped[e.date] = grouped[e.date] || []).push(e); });
+        const catIndex = {}; catBreak.forEach((c,i) => catIndex[c.cat] = i);
+        const weekdayNames = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
+        return Object.keys(grouped).sort().reverse().map(date => {
+          const d = new Date(date + 'T00:00:00');
+          const label = weekdayNames[d.getDay()] + ', ' + formatDate(date);
+          return `
+          <div class="txn-day">${label}</div>
+          ${grouped[date].map(e => {
+            const idx = catIndex[e.cat] !== undefined ? catIndex[e.cat] : 7;
+            const color = e.type === 'in' ? 'var(--forest)' : colorForCat(e.cat, idx);
+            return `
+            <div class="txn-row">
+              <div class="txn-icon" style="background:${color}22; color:${color};">${e.type === 'in' ? '↓' : '↑'}</div>
+              <div class="txn-mid">
+                <div class="txn-name">${e.nota || e.cat}</div>
+                <div class="txn-sub">${e.cat}</div>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span class="txn-val" style="color:${e.type === 'in' ? 'var(--forest)' : 'var(--ink)'};">${e.type === 'in' ? '+' : '-'}${fmt(e.valor).replace('R$ ','')}</span>
+                <span class="entry-edit" data-id="${e.id}">✎</span>
+                <span class="entry-del" data-id="${e.id}">✕</span>
+              </div>
+            </div>`;
+          }).join('')}
+          `;
+        }).join('');
+      })() : '<div class="empty-note">Nada lançado ainda neste mês.</div>'}
     </section>
 
     ${catBreak.length ? `
     <section>
-      <div class="section-title">Gastos por categoria — ${MONTH_LABELS[m]}</div>
-      ${catBreak.map(c => {
-        const budget = state.categoryBudgets[c.cat];
-        const over = budget !== undefined && c.val > budget;
-        return `
-        <div class="cat-row" style="flex-wrap:wrap;">
-          <span style="flex:0 0 100px;">${c.cat}</span>
-          <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${budget ? Math.min(100,(c.val/budget)*100) : c.pct}%; ${over ? 'background:var(--rust);' : ''}"></div></div>
-          <span style="flex:0 0 auto;">${fmt(c.val)}${budget !== undefined ? ' / ' + fmt(budget) : ''}</span>
-          <span class="entry-edit" data-set-budget="${c.cat}" style="flex:0 0 auto;">${budget !== undefined ? '✎' : '+ orçamento'}</span>
+      <div class="section-title">Despesas por categoria — ${MONTH_LABELS[m]}</div>
+      <div class="donut-wrap">
+        ${buildDonutSVG(catBreak)}
+        <div class="donut-legend">
+          ${catBreak.map((c, i) => {
+            const budget = state.categoryBudgets[c.cat];
+            const over = budget !== undefined && c.val > budget;
+            return `
+            <div class="legend-row">
+              <span class="legend-dot" style="background:${colorForCat(c.cat,i)};"></span>
+              <span class="legend-name">${c.cat}</span>
+              <span class="legend-val" style="${over ? 'color:var(--rust);' : ''}">${fmt(c.val)}${budget !== undefined ? '/' + fmt(budget) : ''}</span>
+              <span class="entry-edit" data-set-budget="${c.cat}" style="margin-left:6px;">${budget !== undefined ? '✎' : '+'}</span>
+            </div>`;
+          }).join('')}
         </div>
-        ${over ? `<div class="export-note" style="color:var(--rust); margin:-4px 0 6px;">passou o orçamento em ${fmt(c.val - budget)}</div>` : ''}
-      `;}).join('')}
+      </div>
     </section>` : ''}
     ` : ''}
 
@@ -738,6 +1004,27 @@ function render() {
 
     ${currentView === 'mais' ? `
     <section>
+      <div class="section-title">Divisão de despesas proporcional</div>
+      <div class="form-row two">
+        <input type="text" id="sp-nameA" placeholder="Nome pessoa 1" value="${state.split.nameA || ''}">
+        <input type="number" id="sp-incomeA" placeholder="Renda pessoa 1 (R$)" value="${state.split.incomeA ?? ''}">
+      </div>
+      <div class="form-row two">
+        <input type="text" id="sp-nameB" placeholder="Nome pessoa 2" value="${state.split.nameB || ''}">
+        <input type="number" id="sp-incomeB" placeholder="Renda pessoa 2 (R$)" value="${state.split.incomeB ?? ''}">
+      </div>
+      <div class="form-row"><input type="number" id="sp-total" placeholder="Valor da despesa a dividir (R$)"></div>
+      <div id="sp-result" class="export-note" style="font-size:13px;"></div>
+    </section>
+
+    <section>
+      <div class="section-title">Importar extrato (CSV ou OFX)</div>
+      <div class="export-note" style="margin-bottom:8px;">Aceita export de banco em .csv (data, descrição, valor) ou .ofx/.qfx. Você revisa cada linha antes de confirmar.</div>
+      <input type="file" id="import-file" accept=".csv,.ofx,.qfx,text/csv">
+      <div id="import-preview"></div>
+    </section>
+
+    <section>
       <div class="section-title">Exportar</div>
       <div class="export-row">
         <button class="action-btn secondary" id="btn-export-json">Baixar backup (.json)</button>
@@ -763,6 +1050,134 @@ function render() {
   `;
 
   const on = (id, evt, fn) => { const el = document.getElementById(id); if (el) el.addEventListener(evt, fn); };
+
+  on('mode-form', 'click', () => { lancarMode = 'form'; aiError = null; render(); });
+  on('mode-ai', 'click', () => { lancarMode = 'ai'; render(); });
+
+  on('ai-send', 'click', async () => {
+    const msgEl = document.getElementById('ai-msg');
+    const photoEl = document.getElementById('ai-photo');
+    const msg = msgEl.value.trim();
+    const photo = photoEl.files[0];
+    if (!msg && !photo) { aiError = 'Descreve o gasto ou anexa uma foto.'; render(); return; }
+    aiLoading = true; aiError = null; aiPreview = null;
+    render();
+    try {
+      const result = await callFinancasAI(msg, photo);
+      if (result.erro) { aiError = result.erro; aiPreview = null; }
+      else { aiPreview = result; }
+    } catch (e) {
+      aiError = 'Não consegui falar com o assistente. Confere se a Edge Function e o secret estão configurados. Detalhe: ' + (e.message || e);
+    }
+    aiLoading = false;
+    render();
+  });
+
+  on('ai-confirm', 'click', async () => {
+    if (!aiPreview) return;
+    const p = aiPreview;
+    const date = p.data && /^\d{4}-\d{2}-\d{2}$/.test(p.data) ? p.data : new Date().toISOString().slice(0,10);
+    const ymKey = date.slice(0,7);
+    const month = MONTHS.includes(ymKey) ? ymKey : state.currentMonth;
+    const entry = { id: Date.now().toString(36), month, date, type: p.tipo === 'in' ? 'in' : 'out', cat: p.categoria || 'Outro', nota: p.nota || '', valor: parseFloat(p.valor) || 0 };
+    state.entries.push(entry);
+    aiPreview = null;
+    render();
+    const ok = await saveData();
+    if (!ok) { state.entries.pop(); saveError = true; } else { saveError = false; }
+    render();
+  });
+
+  on('ai-discard', 'click', () => { aiPreview = null; render(); });
+
+  const spA = document.getElementById('sp-incomeA'), spB = document.getElementById('sp-incomeB'), spT = document.getElementById('sp-total'), spResult = document.getElementById('sp-result');
+  if (spA && spB && spT && spResult) {
+    const recalc = async (persist) => {
+      const nameA = document.getElementById('sp-nameA').value.trim() || 'Pessoa 1';
+      const nameB = document.getElementById('sp-nameB').value.trim() || 'Pessoa 2';
+      const incomeA = parseFloat(spA.value) || 0;
+      const incomeB = parseFloat(spB.value) || 0;
+      const total = parseFloat(spT.value) || 0;
+      if (total > 0 && (incomeA > 0 || incomeB > 0)) {
+        const r = calcSplit(total, incomeA, incomeB);
+        spResult.innerHTML = `${nameA} paga <b>${fmt(r.amtA)}</b> (${(r.shareA*100).toFixed(0)}%) · ${nameB} paga <b>${fmt(r.amtB)}</b> (${(r.shareB*100).toFixed(0)}%)`;
+      } else {
+        spResult.innerHTML = 'Preenche as rendas e o valor pra calcular.';
+      }
+      if (persist) {
+        state.split = { nameA, nameB, incomeA: incomeA || null, incomeB: incomeB || null };
+        await saveData();
+      }
+    };
+    ['input'].forEach(evt => {
+      spA.addEventListener(evt, () => recalc(false));
+      spB.addEventListener(evt, () => recalc(false));
+      spT.addEventListener(evt, () => recalc(false));
+    });
+    spA.addEventListener('change', () => recalc(true));
+    spB.addEventListener('change', () => recalc(true));
+    document.getElementById('sp-nameA').addEventListener('change', () => recalc(true));
+    document.getElementById('sp-nameB').addEventListener('change', () => recalc(true));
+    recalc(false);
+  }
+
+  const importFile = document.getElementById('import-file');
+  function renderImportPreview() {
+    const box = document.getElementById('import-preview');
+    if (!box) return;
+    if (!importStaged.length) { box.innerHTML = ''; return; }
+    box.innerHTML = `
+      <div class="export-note" style="margin:10px 0;">${importStaged.length} transações encontradas — desmarca o que não quiser importar:</div>
+      ${importStaged.map(r => `
+        <div class="txn-row">
+          <label style="display:flex; align-items:center; gap:8px; flex:1; min-width:0;">
+            <input type="checkbox" data-stg-include="${r.id}" ${r.include ? 'checked' : ''} style="width:16px;height:16px;">
+            <div class="txn-mid">
+              <div class="txn-name">${r.nota || '(sem descrição)'}</div>
+              <div class="txn-sub">${formatDate(r.date)} · ${r.type === 'in' ? 'entrada' : 'saída'}</div>
+            </div>
+          </label>
+          <span class="txn-val" style="color:${r.type === 'in' ? 'var(--forest)' : 'var(--ink)'};">${r.type === 'in' ? '+' : '-'}${fmt(r.valor).replace('R$ ','')}</span>
+        </div>
+      `).join('')}
+      <button class="add-btn" id="btn-import-confirm" style="margin-top:12px;">Importar selecionados</button>
+    `;
+    document.querySelectorAll('[data-stg-include]').forEach(cb => cb.addEventListener('change', () => {
+      const row = importStaged.find(r => r.id === cb.dataset.stgInclude);
+      if (row) row.include = cb.checked;
+    }));
+    on('btn-import-confirm', 'click', async () => {
+      const toAdd = importStaged.filter(r => r.include).map(r => {
+        const ymKey = r.date.slice(0,7);
+        const month = MONTHS.includes(ymKey) ? ymKey : state.currentMonth;
+        return { id: Date.now().toString(36) + Math.random().toString(36).slice(2,6), month, date: r.date, type: r.type, cat: r.cat, nota: r.nota, valor: r.valor };
+      });
+      const prevEntries = state.entries.slice();
+      state.entries = state.entries.concat(toAdd);
+      importStaged = [];
+      render();
+      const ok = await saveData();
+      if (!ok) { state.entries = prevEntries; saveError = true; } else { saveError = false; }
+      render();
+    });
+  }
+  if (importFile) {
+    importFile.addEventListener('change', async () => {
+      const file = importFile.files[0];
+      if (!file) return;
+      const text = await file.text();
+      const isOfx = /\.ofx$|\.qfx$/i.test(file.name) || text.includes('<STMTTRN>');
+      importStaged = (isOfx ? parseOFXStatement(text) : parseCSVStatement(text)).map((r, i) => ({ ...r, id: 'stg-' + i, cat: r.type === 'in' ? 'Renda' : 'Outro', include: true }));
+      renderImportPreview();
+    });
+  }
+  renderImportPreview();
+
+  on('theme-toggle', 'click', () => {
+    const next = getTheme() === 'light' ? 'dark' : 'light';
+    setTheme(next);
+    render();
+  });
 
   document.querySelectorAll('.nav-item').forEach(el => el.addEventListener('click', () => {
     currentView = el.dataset.view;
@@ -887,6 +1302,15 @@ function render() {
     render();
     const ok = await saveData();
     if (!ok) { state.entries.pop(); saveError = true; } else { saveError = false; }
+    render();
+  }));
+
+  document.querySelectorAll('[data-ignore-rec]').forEach(el => el.addEventListener('click', async () => {
+    const key = el.dataset.ignoreRec;
+    state.ignoredRecurrences.push(key);
+    render();
+    const ok = await saveData();
+    if (!ok) { state.ignoredRecurrences = state.ignoredRecurrences.filter(k => k !== key); saveError = true; } else { saveError = false; }
     render();
   }));
 
@@ -1059,6 +1483,7 @@ function render() {
 function formatDate(iso) { const [y,mo,d] = iso.split('-'); return `${d}/${mo}`; }
 
 async function boot() {
+  setTheme(getTheme());
   const pin = getPin();
   if (pin && !unlocked) { renderLock(); return; }
   cfg = loadConfig();
