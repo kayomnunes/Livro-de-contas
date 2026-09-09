@@ -281,7 +281,7 @@ function renderLock(errorMsg) {
       <div class="setup-sub">Digite seu PIN pra abrir.</div>
       <div class="setup-error ${errorMsg ? 'show' : ''}">${errorMsg || ''}</div>
       <div class="setup-field">
-        <input type="password" inputmode="numeric" maxlength="8" id="pin-input" class="lock-pin" placeholder="••••">
+        <input type="password" maxlength="20" id="pin-input" class="lock-pin" placeholder="••••" style="letter-spacing:6px; font-size:22px;">
       </div>
       <button class="setup-btn" id="btn-unlock">Entrar</button>
     </div>
@@ -1010,7 +1010,7 @@ function render() {
     if (current) {
       if (confirm('Remover a proteção por PIN?')) { setPin(null); render(); }
     } else {
-      const p = prompt('Cria um PIN de 4 a 8 dígitos:');
+      const p = prompt('Cria uma senha/PIN (letras, números ou símbolos):');
       if (p && p.trim()) { setPin(p.trim()); render(); }
     }
   });
