@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <title>Livro de Contas</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#26261F">
+<meta name="theme-color" content="#14171A">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
@@ -14,15 +14,21 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root {
-    --paper: #ECE6D8; --paper-alt: #F6F1E6; --ink: #26261F; --ink-soft: #5B5A4E;
-    --line: #C9BFA8; --line-strong: #A79C81; --forest: #2F5233; --forest-soft: #E4EBE1;
-    --rust: #9C4A3E; --rust-soft: #F1E2DE; --gold: #A8752E; --gold-soft: #F1E5CC;
+    --paper: #14171A; --paper-alt: #1E2227; --ink: #ECE8E1; --ink-soft: #8B939C;
+    --line: #2E333A; --line-strong: #454C55; --forest: #4CAF7D; --forest-soft: rgba(76,175,125,0.16);
+    --rust: #E2695C; --rust-soft: rgba(226,105,92,0.16); --gold: #D4A544; --gold-soft: rgba(212,165,68,0.16);
     --serif: 'Spectral', Georgia, serif; --sans: 'IBM Plex Sans', -apple-system, sans-serif;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: var(--paper); }
   body { font-family: var(--sans); color: var(--ink); }
-  .sheet { max-width: 640px; margin: 0 auto; padding: 28px 20px 60px; background: var(--paper); min-height: 100vh; }
+  .sheet { max-width: 640px; margin: 0 auto; padding: 28px 20px 90px; background: var(--paper); min-height: 100vh; }
+
+  .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--paper-alt); border-top: 1px solid var(--line-strong); display: flex; justify-content: center; z-index: 60; }
+  .bottom-nav-inner { max-width: 640px; width: 100%; display: flex; }
+  .nav-item { flex: 1; text-align: center; padding: 10px 4px 8px; cursor: pointer; color: var(--ink-soft); font-size: 10.5px; font-family: var(--sans); user-select: none; }
+  .nav-item .nav-icon { font-size: 19px; display: block; margin-bottom: 2px; }
+  .nav-item.active { color: var(--gold); }
 
   .masthead { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 2px solid var(--ink); padding-bottom: 10px; margin-bottom: 6px; }
   .masthead h1 { font-family: var(--serif); font-weight: 600; font-size: 22px; margin: 0; letter-spacing: 0.2px; }
@@ -160,8 +166,6 @@
   .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--forest); display: inline-block; }
   .sync-dot.busy { background: var(--gold); }
 
-  .fab { position: fixed; bottom: 22px; right: 22px; width: 54px; height: 54px; border-radius: 50%; background: var(--ink); color: var(--paper-alt); font-size: 26px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 3px 10px rgba(0,0,0,0.3); z-index: 50; border: none; }
-
   .loading { text-align: center; padding: 40px 0; color: var(--ink-soft); font-family: var(--serif); font-style: italic; }
 </style>
 </head>
@@ -257,6 +261,7 @@ let copyConfirmVisible = false;
 let selType = 'in';
 let editingId = null;
 let unlocked = false;
+let currentView = 'dashboard';
 
 function fmt(n) {
   const neg = n < 0;
@@ -464,6 +469,11 @@ function render() {
     </div>
     <div class="masthead" style="border-bottom:none; margin-bottom:10px;"><div class="subt">plano contínuo desde out/26</div></div>
 
+    <div class="save-error ${saveError ? 'show' : ''}">Não deu pra salvar agora — confere sua internet e tenta de novo em alguns segundos.</div>
+
+    <div class="tabs">${MONTHS.map(mo => `<div class="tab ${mo===m?'active':''}" data-month="${mo}">${MONTH_LABELS[mo]}</div>`).join('')}</div>
+
+    ${currentView === 'dashboard' ? `
     <div class="debt-total-box">
       <div>
         <div class="debt-total-num">${fmt(totalDebt)}</div>
@@ -471,10 +481,6 @@ function render() {
       </div>
       <div class="debt-total-label" style="max-width:180px; text-align:right;">soma tudo que ainda falta pagar: Bianca, Noverde e as dívidas ainda não quitadas</div>
     </div>
-
-    <div class="save-error ${saveError ? 'show' : ''}">Não deu pra salvar agora — confere sua internet e tenta de novo em alguns segundos.</div>
-
-    <div class="tabs">${MONTHS.map(mo => `<div class="tab ${mo===m?'active':''}" data-month="${mo}">${MONTH_LABELS[mo]}</div>`).join('')}</div>
 
     <div class="hero">
       <div class="hero-row">
@@ -493,40 +499,6 @@ function render() {
         <br><span style="color:${acumulado < 0 ? 'var(--rust)' : 'var(--forest)'};">Saldo acumulado até ${MONTH_LABELS[m]}: <b style="color:inherit;">${fmt(acumulado)}</b></span> — soma a sobra (ou falta) de todos os meses desde o início, carregando de um pro outro.
       </div>
     </div>
-
-    <section id="entry-form-section">
-      <div class="section-title">${editingId ? 'Editar lançamento' : 'Registrar lançamento'}</div>
-      <div class="form-row two">
-        <input type="number" id="in-valor" placeholder="Valor (R$)" step="0.01" min="0">
-        <input type="date" id="in-data">
-      </div>
-      <div class="form-row two">
-        <div class="toggle-group">
-          <div class="toggle-opt" id="opt-in" data-t="in">Entrada</div>
-          <div class="toggle-opt" id="opt-out" data-t="out">Saída</div>
-        </div>
-        <select id="in-cat">
-          <option value="Renda">Renda</option>
-          <option value="Dívida fixa">Dívida fixa</option>
-          <option value="Poupança">Poupança</option>
-          <option value="Cartão alimentação">Cartão alimentação</option>
-          <option value="Transporte">Transporte</option>
-          <option value="Lazer">Lazer</option>
-          <option value="Assinaturas">Assinaturas</option>
-          <option value="Compras">Compras</option>
-          <option value="Saúde">Saúde</option>
-          ${state.customCategories.map(c => `<option value="${c}">${c}</option>`).join('')}
-          <option value="Outro">Outro</option>
-          <option value="__new__">+ Nova categoria...</option>
-        </select>
-      </div>
-      <div class="form-row" id="goal-select-row" style="display:none;">
-        <select id="in-goal">${state.goals.map(g => `<option value="${g.id}">${g.name}</option>`).join('')}</select>
-      </div>
-      <div class="form-row"><input type="text" id="in-nota" placeholder="Nota (opcional — ex: quitação Empréstimo 1)"></div>
-      <button class="add-btn" id="btn-add">${editingId ? 'Salvar edição' : '+ Adicionar lançamento'}</button>
-      ${editingId ? '<div class="cancel-edit" id="cancel-edit">cancelar edição</div>' : ''}
-    </section>
 
     <div class="proj-box">
       <div class="section-title" style="border:none; margin-bottom:8px; padding-bottom:0;">Projeção de ${MONTH_LABELS[m]}</div>
@@ -569,31 +541,6 @@ function render() {
       </div>
     </div>
 
-    ${state.goals.map(g => {
-      const saved = totalSavedFor(g.id);
-      return `
-      <div class="goal-box">
-        <div class="goal-top">
-          <span class="goal-title">${g.name}</span>
-          <span class="goal-deadline">${g.deadline ? 'até ' + g.deadline : ''} ${state.goals.length > 1 ? `<span class="entry-del" data-goal-del="${g.id}" style="margin-left:8px;">✕</span>` : ''}</span>
-        </div>
-        <div class="goal-bar-track"><div class="goal-bar-fill" style="width:${Math.min(100, (saved/g.target)*100)}%"></div></div>
-        <div class="goal-numbers"><span>guardado: <b>${fmt(saved)}</b></span><span>falta: <b>${fmt(Math.max(0, g.target - saved))}</b></span></div>
-      </div>`;
-    }).join('')}
-
-    <section style="margin-bottom:26px;">
-      <button class="action-btn secondary" id="btn-new-goal-toggle">+ Nova meta</button>
-      <div id="new-goal-form" style="display:none; margin-top:12px;">
-        <div class="form-row two">
-          <input type="text" id="ng-nome" placeholder="Nome da meta (ex: Viagem)">
-          <input type="number" id="ng-valor" placeholder="Valor alvo (R$)" step="0.01" min="0">
-        </div>
-        <div class="form-row"><input type="text" id="ng-prazo" placeholder="Prazo (opcional, ex: julho de 2027)"></div>
-        <button class="add-btn" id="btn-new-goal-save">Salvar meta</button>
-      </div>
-    </section>
-
     <section>
       <div class="section-title">Próximos vencimentos</div>
       ${dueList.map(d => `
@@ -632,6 +579,42 @@ function render() {
       <div class="chart-labels">${chartMonths.map(cm => `<span>${MONTH_LABELS[cm]}</span>`).join('')}</div>
       <div class="hero-label" style="margin-top:6px;"><span style="color:var(--forest);">■</span> entradas &nbsp; <span style="color:var(--gold);">■</span> dívidas pagas</div>
     </section>
+    ` : ''}
+
+    ${currentView === 'lancar' ? `
+    <section id="entry-form-section">
+      <div class="section-title">${editingId ? 'Editar lançamento' : 'Registrar lançamento'}</div>
+      <div class="form-row two">
+        <input type="number" id="in-valor" placeholder="Valor (R$)" step="0.01" min="0">
+        <input type="date" id="in-data">
+      </div>
+      <div class="form-row two">
+        <div class="toggle-group">
+          <div class="toggle-opt" id="opt-in" data-t="in">Entrada</div>
+          <div class="toggle-opt" id="opt-out" data-t="out">Saída</div>
+        </div>
+        <select id="in-cat">
+          <option value="Renda">Renda</option>
+          <option value="Dívida fixa">Dívida fixa</option>
+          <option value="Poupança">Poupança</option>
+          <option value="Cartão alimentação">Cartão alimentação</option>
+          <option value="Transporte">Transporte</option>
+          <option value="Lazer">Lazer</option>
+          <option value="Assinaturas">Assinaturas</option>
+          <option value="Compras">Compras</option>
+          <option value="Saúde">Saúde</option>
+          ${state.customCategories.map(c => `<option value="${c}">${c}</option>`).join('')}
+          <option value="Outro">Outro</option>
+          <option value="__new__">+ Nova categoria...</option>
+        </select>
+      </div>
+      <div class="form-row" id="goal-select-row" style="display:none;">
+        <select id="in-goal">${state.goals.map(g => `<option value="${g.id}">${g.name}</option>`).join('')}</select>
+      </div>
+      <div class="form-row"><input type="text" id="in-nota" placeholder="Nota (opcional — ex: quitação Empréstimo 1)"></div>
+      <button class="add-btn" id="btn-add">${editingId ? 'Salvar edição' : '+ Adicionar lançamento'}</button>
+      ${editingId ? '<div class="cancel-edit" id="cancel-edit">cancelar edição</div>' : ''}
+    </section>
 
     <section>
       <div class="section-title">Lançamentos de ${MONTH_LABELS[m]}</div>
@@ -666,7 +649,15 @@ function render() {
         ${over ? `<div class="export-note" style="color:var(--rust); margin:-4px 0 6px;">passou o orçamento em ${fmt(c.val - budget)}</div>` : ''}
       `;}).join('')}
     </section>` : ''}
+    ` : ''}
 
+    ${currentView === 'dividas' ? `
+    <div class="debt-total-box">
+      <div>
+        <div class="debt-total-num">${fmt(totalDebt)}</div>
+        <div class="debt-total-label">dívida total restante, a partir de ${MONTH_LABELS[m]}</div>
+      </div>
+    </div>
     <section>
       <div class="section-title">Dívidas do plano</div>
       ${debtsAll.map(d => {
@@ -716,7 +707,36 @@ function render() {
         </div>
       </div>
     </section>
+    ` : ''}
 
+    ${currentView === 'metas' ? `
+    ${state.goals.map(g => {
+      const saved = totalSavedFor(g.id);
+      return `
+      <div class="goal-box">
+        <div class="goal-top">
+          <span class="goal-title">${g.name}</span>
+          <span class="goal-deadline">${g.deadline ? 'até ' + g.deadline : ''} ${state.goals.length > 1 ? `<span class="entry-del" data-goal-del="${g.id}" style="margin-left:8px;">✕</span>` : ''}</span>
+        </div>
+        <div class="goal-bar-track"><div class="goal-bar-fill" style="width:${Math.min(100, (saved/g.target)*100)}%"></div></div>
+        <div class="goal-numbers"><span>guardado: <b>${fmt(saved)}</b></span><span>falta: <b>${fmt(Math.max(0, g.target - saved))}</b></span></div>
+      </div>`;
+    }).join('')}
+
+    <section style="margin-bottom:26px;">
+      <button class="action-btn secondary" id="btn-new-goal-toggle">+ Nova meta</button>
+      <div id="new-goal-form" style="display:none; margin-top:12px;">
+        <div class="form-row two">
+          <input type="text" id="ng-nome" placeholder="Nome da meta (ex: Viagem)">
+          <input type="number" id="ng-valor" placeholder="Valor alvo (R$)" step="0.01" min="0">
+        </div>
+        <div class="form-row"><input type="text" id="ng-prazo" placeholder="Prazo (opcional, ex: julho de 2027)"></div>
+        <button class="add-btn" id="btn-new-goal-save">Salvar meta</button>
+      </div>
+    </section>
+    ` : ''}
+
+    ${currentView === 'mais' ? `
     <section>
       <div class="section-title">Exportar</div>
       <div class="export-row">
@@ -731,60 +751,77 @@ function render() {
     <div class="pin-link" id="pin-link">${getPin() ? 'trocar/remover PIN' : 'proteger com PIN'}</div>
     <div class="switch-link" id="switch-link">trocar de conta / configuração</div>
     <footer>sincronizado na nuvem — acesse de qualquer aparelho com o mesmo código</footer>
-    <button class="fab" id="fab-add" title="Adicionar lançamento">+</button>
+    ` : ''}
+
+    <div class="bottom-nav"><div class="bottom-nav-inner">
+      <div class="nav-item ${currentView==='dashboard'?'active':''}" data-view="dashboard"><span class="nav-icon">📊</span>Painel</div>
+      <div class="nav-item ${currentView==='lancar'?'active':''}" data-view="lancar"><span class="nav-icon">➕</span>Lançar</div>
+      <div class="nav-item ${currentView==='dividas'?'active':''}" data-view="dividas"><span class="nav-icon">💳</span>Dívidas</div>
+      <div class="nav-item ${currentView==='metas'?'active':''}" data-view="metas"><span class="nav-icon">🎯</span>Metas</div>
+      <div class="nav-item ${currentView==='mais'?'active':''}" data-view="mais"><span class="nav-icon">⚙️</span>Mais</div>
+    </div></div>
   `;
 
-  document.getElementById('fab-add').addEventListener('click', () => {
-    document.getElementById('entry-form-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setTimeout(() => document.getElementById('in-valor').focus(), 400);
-  });
+  const on = (id, evt, fn) => { const el = document.getElementById(id); if (el) el.addEventListener(evt, fn); };
+
+  document.querySelectorAll('.nav-item').forEach(el => el.addEventListener('click', () => {
+    currentView = el.dataset.view;
+    render();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }));
 
   document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => { state.currentMonth = t.dataset.month; render(); }));
   const activeTab = document.querySelector('.tab.active');
   if (activeTab) activeTab.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
 
-  document.getElementById('opt-in').classList.toggle('sel-in', selType === 'in');
-  document.getElementById('opt-out').classList.toggle('sel-out', selType === 'out');
-  document.getElementById('opt-in').addEventListener('click', () => { selType = 'in'; render(); });
-  document.getElementById('opt-out').addEventListener('click', () => { selType = 'out'; render(); });
+  const optIn = document.getElementById('opt-in');
+  const optOut = document.getElementById('opt-out');
+  if (optIn && optOut) {
+    optIn.classList.toggle('sel-in', selType === 'in');
+    optOut.classList.toggle('sel-out', selType === 'out');
+    optIn.addEventListener('click', () => { selType = 'in'; render(); });
+    optOut.addEventListener('click', () => { selType = 'out'; render(); });
+  }
 
   const catEl0 = document.getElementById('in-cat');
   const goalRow = document.getElementById('goal-select-row');
-  const syncGoalRow = () => { goalRow.style.display = catEl0.value === 'Poupança' ? 'block' : 'none'; };
-  catEl0.addEventListener('change', async () => {
-    if (catEl0.value === '__new__') {
-      const nome = prompt('Nome da nova categoria:');
-      if (nome && nome.trim()) {
-        const trimmed = nome.trim();
-        if (!state.customCategories.includes(trimmed)) {
-          state.customCategories.push(trimmed);
-          await saveData();
+  if (catEl0 && goalRow) {
+    const syncGoalRow = () => { goalRow.style.display = catEl0.value === 'Poupança' ? 'block' : 'none'; };
+    catEl0.addEventListener('change', async () => {
+      if (catEl0.value === '__new__') {
+        const nome = prompt('Nome da nova categoria:');
+        if (nome && nome.trim()) {
+          const trimmed = nome.trim();
+          if (!state.customCategories.includes(trimmed)) {
+            state.customCategories.push(trimmed);
+            await saveData();
+          }
+          render();
+          document.getElementById('in-cat').value = trimmed;
+          syncGoalRow();
+          return;
+        } else {
+          catEl0.value = 'Outro';
         }
-        render();
-        document.getElementById('in-cat').value = trimmed;
-        syncGoalRow();
-        return;
-      } else {
-        catEl0.value = 'Outro';
       }
+      syncGoalRow();
+    });
+
+    if (editingId) {
+      const e = state.entries.find(x => x.id === editingId);
+      if (e) {
+        document.getElementById('in-valor').value = e.valor;
+        document.getElementById('in-data').value = e.date;
+        document.getElementById('in-cat').value = e.cat;
+        document.getElementById('in-nota').value = e.nota || '';
+        if (e.cat === 'Poupança' && e.goalId) document.getElementById('in-goal').value = e.goalId;
+      }
+      on('cancel-edit', 'click', () => { editingId = null; render(); });
     }
     syncGoalRow();
-  });
-
-  if (editingId) {
-    const e = state.entries.find(x => x.id === editingId);
-    if (e) {
-      document.getElementById('in-valor').value = e.valor;
-      document.getElementById('in-data').value = e.date;
-      document.getElementById('in-cat').value = e.cat;
-      document.getElementById('in-nota').value = e.nota || '';
-      if (e.cat === 'Poupança' && e.goalId) document.getElementById('in-goal').value = e.goalId;
-    }
-    document.getElementById('cancel-edit').addEventListener('click', () => { editingId = null; render(); });
   }
-  syncGoalRow();
 
-  document.getElementById('btn-add').addEventListener('click', async () => {
+  on('btn-add', 'click', async () => {
     const valorEl = document.getElementById('in-valor');
     const dataEl = document.getElementById('in-data');
     const catEl = document.getElementById('in-cat');
@@ -815,14 +852,17 @@ function render() {
   });
 
   document.querySelectorAll('.entry-edit').forEach(el => el.addEventListener('click', () => {
+    if (!el.dataset.id) return;
     editingId = el.dataset.id;
     const e = state.entries.find(x => x.id === editingId);
     if (e) selType = e.type;
+    currentView = 'lancar';
     render();
     document.getElementById('in-valor').focus();
   }));
 
   document.querySelectorAll('.entry-del').forEach(el => el.addEventListener('click', async () => {
+    if (!el.dataset.id) return;
     const removed = state.entries.find(e => e.id === el.dataset.id);
     state.entries = state.entries.filter(e => e.id !== el.dataset.id);
     render();
@@ -850,12 +890,12 @@ function render() {
     render();
   }));
 
-  document.getElementById('btn-new-bill-toggle').addEventListener('click', () => {
+  on('btn-new-bill-toggle', 'click', () => {
     const f = document.getElementById('new-bill-form');
     f.style.display = f.style.display === 'none' ? 'block' : 'none';
   });
 
-  document.getElementById('btn-new-bill-save').addEventListener('click', async () => {
+  on('btn-new-bill-save', 'click', async () => {
     const nome = document.getElementById('nb-nome').value.trim();
     const valor = parseFloat(document.getElementById('nb-valor').value);
     const dia = parseInt(document.getElementById('nb-dia').value, 10);
@@ -908,12 +948,12 @@ function render() {
     render();
   }));
 
-  document.getElementById('btn-new-goal-toggle').addEventListener('click', () => {
+  on('btn-new-goal-toggle', 'click', () => {
     const f = document.getElementById('new-goal-form');
     f.style.display = f.style.display === 'none' ? 'block' : 'none';
   });
 
-  document.getElementById('btn-new-goal-save').addEventListener('click', async () => {
+  on('btn-new-goal-save', 'click', async () => {
     const nome = document.getElementById('ng-nome').value.trim();
     const valor = parseFloat(document.getElementById('ng-valor').value);
     const prazo = document.getElementById('ng-prazo').value.trim();
@@ -936,12 +976,12 @@ function render() {
     render();
   }));
 
-  document.getElementById('btn-new-debt-toggle').addEventListener('click', () => {
+  on('btn-new-debt-toggle', 'click', () => {
     const f = document.getElementById('new-debt-form');
     f.style.display = f.style.display === 'none' ? 'block' : 'none';
   });
 
-  document.getElementById('btn-new-debt-save').addEventListener('click', async () => {
+  on('btn-new-debt-save', 'click', async () => {
     const nome = document.getElementById('nd-nome').value.trim();
     const valor = parseFloat(document.getElementById('nd-valor').value);
     const tipo = document.getElementById('nd-tipo').value;
@@ -972,7 +1012,7 @@ function render() {
     render();
   }));
 
-  document.getElementById('btn-export-json').addEventListener('click', () => {
+  on('btn-export-json', 'click', () => {
     const blob = new Blob([JSON.stringify({ entries: state.entries, debtStatus: state.debtStatus, customDebts: state.customDebts, goals: state.goals, categoryBudgets: state.categoryBudgets, plannedBills: state.plannedBills, customCategories: state.customCategories }, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -980,7 +1020,7 @@ function render() {
     a.click();
   });
 
-  document.getElementById('btn-export-copy').addEventListener('click', async () => {
+  on('btn-export-copy', 'click', async () => {
     const text = buildSummaryText();
     try { await navigator.clipboard.writeText(text); }
     catch (e) {
@@ -992,7 +1032,7 @@ function render() {
     setTimeout(() => { copyConfirmVisible = false; render(); }, 4000);
   });
 
-  document.getElementById('reset-link').addEventListener('click', async () => {
+  on('reset-link', 'click', async () => {
     if (confirm('Apagar todos os lançamentos e status de dívidas? Isso não pode ser desfeito.')) {
       const prevEntries = state.entries, prevStatus = state.debtStatus, prevCustom = state.customDebts, prevBills = state.plannedBills;
       state.entries = []; state.debtStatus = {}; state.customDebts = []; state.plannedBills = [];
@@ -1003,9 +1043,9 @@ function render() {
     }
   });
 
-  document.getElementById('switch-link').addEventListener('click', () => renderSetup());
+  on('switch-link', 'click', () => renderSetup());
 
-  document.getElementById('pin-link').addEventListener('click', () => {
+  on('pin-link', 'click', () => {
     const current = getPin();
     if (current) {
       if (confirm('Remover a proteção por PIN?')) { setPin(null); render(); }
