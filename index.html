@@ -63,6 +63,10 @@
   .goal-numbers { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--ink-soft); }
   .goal-numbers b { color: var(--ink); font-variant-numeric: tabular-nums; }
 
+  .debt-total-box { border: 1px solid var(--rust); background: var(--rust-soft); padding: 14px 18px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+  .debt-total-num { font-family: var(--serif); font-size: 26px; font-weight: 600; color: var(--rust); font-variant-numeric: tabular-nums; }
+  .debt-total-label { font-size: 12px; color: var(--ink-soft); }
+
   section { margin-bottom: 30px; }
   .section-title { font-family: var(--serif); font-size: 15px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--ink); padding-bottom: 6px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
 
@@ -207,6 +211,18 @@ const DEBTS = [
   { id: 'nov99', name: '99 — Empréstimo 4', meta: 'Última parcela R$318,69', kind: 'checkable', dueDay: 10, quickCat: 'Dívida fixa', quickVal: () => 318.69 },
 ];
 
+function biancaAtOffset(o) { if (o < 0) return 0; if (o <= 3) return 200; if (o <= 8) return 60; return 0; }
+function noverdeAtOffset(o) { if (o < 0) return 0; return o <= 10 ? 260.46 : 0; }
+function sumFromOffset(fn, fromOffset) { let s = 0; for (let o = Math.max(fromOffset, 0); o <= 15; o++) s += fn(o); return s; }
+
+function totalDebtRemaining() {
+  const ci = monthsSinceOct2026(state.currentMonth);
+  let total = sumFromOffset(biancaAtOffset, ci) + sumFromOffset(noverdeAtOffset, ci);
+  DEBTS.filter(d => d.kind === 'checkable' && d.id !== 'noverde').forEach(d => { if (!state.debtStatus[d.id]) total += d.quickVal(state.currentMonth); });
+  state.customDebts.forEach(d => { if (d.kind === 'checkable' && !state.debtStatus[d.id]) total += d.valor; });
+  return total;
+}
+
 function allDebts() {
   const custom = state.customDebts.map(c => ({
     id: c.id, name: c.name, meta: c.meta, kind: c.kind, dueDay: c.dueDay,
@@ -222,7 +238,7 @@ const TABLE = 'financas';
 
 let cfg = null;
 let sb = null;
-let state = { entries: [], debtStatus: {}, customDebts: [], goals: [], currentMonth: MONTHS[0] };
+let state = { entries: [], debtStatus: {}, customDebts: [], goals: [], categoryBudgets: {}, currentMonth: MONTHS[0] };
 let saveError = false;
 let syncing = false;
 let copyConfirmVisible = false;
@@ -312,6 +328,7 @@ async function loadData() {
       state.debtStatus = data.payload.debtStatus || {};
       state.customDebts = data.payload.customDebts || [];
       state.goals = data.payload.goals && data.payload.goals.length ? data.payload.goals : [DEFAULT_GOAL];
+      state.categoryBudgets = data.payload.categoryBudgets || {};
     } else {
       state.goals = [DEFAULT_GOAL];
       await sb.from(TABLE).insert({ id: cfg.code, payload: { entries: [], debtStatus: {}, customDebts: [], goals: state.goals } });
@@ -328,7 +345,7 @@ async function saveData() {
     try {
       const { error } = await sb.from(TABLE).upsert({
         id: cfg.code,
-        payload: { entries: state.entries, debtStatus: state.debtStatus, customDebts: state.customDebts, goals: state.goals },
+        payload: { entries: state.entries, debtStatus: state.debtStatus, customDebts: state.customDebts, goals: state.goals, categoryBudgets: state.categoryBudgets },
         updated_at: new Date().toISOString()
       });
       if (!error) { syncing = false; return true; }
@@ -342,6 +359,10 @@ async function saveData() {
 
 function entriesForMonth(m) { return state.entries.filter(e => e.month === m).sort((a,b) => a.date.localeCompare(b.date)); }
 function sobraReal(m) { return entriesForMonth(m).reduce((sum, e) => sum + (e.type === 'in' ? e.valor : -e.valor), 0); }
+function saldoAcumulado(m) {
+  const idx = monthIndex(m);
+  return MONTHS.slice(0, idx + 1).reduce((sum, mm) => sum + sobraReal(mm), 0);
+}
 function totalSavedFor(goalId) { return state.entries.filter(e => e.cat === 'Poupança' && e.goalId === goalId && e.type === 'out').reduce((sum, e) => sum + e.valor, 0); }
 function sumIn(m) { return entriesForMonth(m).filter(e => e.type === 'in').reduce((s,e) => s + e.valor, 0); }
 function sumDebtOut(m) { return entriesForMonth(m).filter(e => e.type === 'out' && e.cat === 'Dívida fixa').reduce((s,e) => s + e.valor, 0); }
@@ -392,6 +413,7 @@ function render() {
   const diff = hasTarget ? real - target : null;
   const hasEntries = entriesForMonth(m).length > 0;
   const fixedNow = fixedObrigacoes(m);
+  const acumulado = saldoAcumulado(m);
   const noteText = PLAN_NOTE[m] || (fixedNow > 0
     ? `Gastos fixos previstos: ${fmt(fixedNow)} (Bianca${noverdeForMonth(m) > 0 ? ' + Noverde' : ''}). O resto é livre pra guardar rumo ao 20k.`
     : 'Nenhuma dívida fixa prevista neste mês — foco total na meta de poupança.');
@@ -406,6 +428,7 @@ function render() {
   const catBreak = categoryBreakdown(m);
   const debtsAll = allDebts();
   const dueList = debtsAll.filter(d => d.dueDay).map(d => ({ ...d, days: daysUntil(d.dueDay) })).sort((a,b) => a.days - b.days);
+  const totalDebt = totalDebtRemaining();
 
   app.innerHTML = `
     <div class="masthead">
@@ -413,6 +436,14 @@ function render() {
       <span class="sync-badge"><span class="sync-dot ${syncing ? 'busy' : ''}"></span>${syncing ? 'sincronizando' : 'sincronizado'}</span>
     </div>
     <div class="masthead" style="border-bottom:none; margin-bottom:10px;"><div class="subt">plano contínuo desde out/26</div></div>
+
+    <div class="debt-total-box">
+      <div>
+        <div class="debt-total-num">${fmt(totalDebt)}</div>
+        <div class="debt-total-label">dívida total restante, a partir de ${MONTH_LABELS[m]}</div>
+      </div>
+      <div class="debt-total-label" style="max-width:180px; text-align:right;">soma tudo que ainda falta pagar: Bianca, Noverde e as dívidas ainda não quitadas</div>
+    </div>
 
     <div class="save-error ${saveError ? 'show' : ''}">Não deu pra salvar agora — confere sua internet e tenta de novo em alguns segundos.</div>
 
@@ -432,6 +463,7 @@ function render() {
           ? `Você está R$ ${Math.abs(diff).toLocaleString('pt-BR',{minimumFractionDigits:2})} acima do previsto pro mês.`
           : `Você está R$ ${Math.abs(diff).toLocaleString('pt-BR',{minimumFractionDigits:2})} abaixo do previsto — vale checar o que fugiu do plano.`)
           : (hasTarget && !hasEntries ? 'Registre seus lançamentos abaixo pra comparar com o plano.' : '')}
+        <br><span style="color:${acumulado < 0 ? 'var(--rust)' : 'var(--forest)'};">Saldo acumulado até ${MONTH_LABELS[m]}: <b style="color:inherit;">${fmt(acumulado)}</b></span> — soma a sobra (ou falta) de todos os meses desde o início, carregando de um pro outro.
       </div>
     </div>
 
@@ -515,7 +547,11 @@ function render() {
           <option value="Dívida fixa">Dívida fixa</option>
           <option value="Poupança">Poupança</option>
           <option value="Cartão alimentação">Cartão alimentação</option>
-          <option value="Gasto do dia a dia">Gasto do dia a dia</option>
+          <option value="Transporte">Transporte</option>
+          <option value="Lazer">Lazer</option>
+          <option value="Assinaturas">Assinaturas</option>
+          <option value="Compras">Compras</option>
+          <option value="Saúde">Saúde</option>
           <option value="Outro">Outro</option>
         </select>
       </div>
@@ -547,13 +583,18 @@ function render() {
     ${catBreak.length ? `
     <section>
       <div class="section-title">Gastos por categoria — ${MONTH_LABELS[m]}</div>
-      ${catBreak.map(c => `
-        <div class="cat-row">
-          <span>${c.cat}</span>
-          <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${c.pct}%"></div></div>
-          <span>${fmt(c.val)}</span>
+      ${catBreak.map(c => {
+        const budget = state.categoryBudgets[c.cat];
+        const over = budget !== undefined && c.val > budget;
+        return `
+        <div class="cat-row" style="flex-wrap:wrap;">
+          <span style="flex:0 0 100px;">${c.cat}</span>
+          <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${budget ? Math.min(100,(c.val/budget)*100) : c.pct}%; ${over ? 'background:var(--rust);' : ''}"></div></div>
+          <span style="flex:0 0 auto;">${fmt(c.val)}${budget !== undefined ? ' / ' + fmt(budget) : ''}</span>
+          <span class="entry-edit" data-set-budget="${c.cat}" style="flex:0 0 auto;">${budget !== undefined ? '✎' : '+ orçamento'}</span>
         </div>
-      `).join('')}
+        ${over ? `<div class="export-note" style="color:var(--rust); margin:-4px 0 6px;">passou o orçamento em ${fmt(c.val - budget)}</div>` : ''}
+      `;}).join('')}
     </section>` : ''}
 
     <section>
@@ -715,6 +756,24 @@ function render() {
     render();
   }));
 
+  document.querySelectorAll('[data-set-budget]').forEach(el => el.addEventListener('click', async () => {
+    const cat = el.dataset.setBudget;
+    const current = state.categoryBudgets[cat];
+    const val = prompt('Orçamento mensal pra "' + cat + '" (deixe vazio pra remover):', current !== undefined ? current : '');
+    if (val === null) return;
+    const prevBudgets = { ...state.categoryBudgets };
+    if (val.trim() === '') delete state.categoryBudgets[cat];
+    else {
+      const num = parseFloat(val.replace(',', '.'));
+      if (!num || num <= 0) { alert('Valor inválido.'); return; }
+      state.categoryBudgets[cat] = num;
+    }
+    render();
+    const ok = await saveData();
+    if (!ok) { state.categoryBudgets = prevBudgets; saveError = true; } else { saveError = false; }
+    render();
+  }));
+
   document.getElementById('btn-new-goal-toggle').addEventListener('click', () => {
     const f = document.getElementById('new-goal-form');
     f.style.display = f.style.display === 'none' ? 'block' : 'none';
@@ -780,7 +839,7 @@ function render() {
   }));
 
   document.getElementById('btn-export-json').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify({ entries: state.entries, debtStatus: state.debtStatus, customDebts: state.customDebts, goals: state.goals }, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ entries: state.entries, debtStatus: state.debtStatus, customDebts: state.customDebts, goals: state.goals, categoryBudgets: state.categoryBudgets }, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'livro-de-contas-backup-' + new Date().toISOString().slice(0,10) + '.json';
